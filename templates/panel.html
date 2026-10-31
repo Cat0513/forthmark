@@ -104,7 +104,12 @@ button { font: inherit; cursor: pointer; }
 .iconbtn.ghost { width: 22px; height: 22px; border: 0; background: transparent; color: var(--ink3); border-radius: 6px; }
 .iconbtn.ghost:hover { background: rgba(127,127,127,.16); color: var(--ink); }
 .projbar { display: flex; gap: 6px; align-items: center; }
-.projects { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+/* shrink, don't grow: with room to spare the ＋ sits right after the last project */
+.projects { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 0 1 auto; min-width: 0; }
+/* "‹ 1" / "2 ›": how many projects are out of view on that side; click to scroll there */
+.pscroll { flex: none; border: none; background: none; color: var(--blue); font: inherit; font-size: 12px;
+  padding: 3px 2px; cursor: pointer; white-space: nowrap; }
+.pscroll[hidden] { display: none; }
 .projects::-webkit-scrollbar { display: none; }
 /* more projects off to one side: fade that edge (set by fitProjects) */
 .projects.fade-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
@@ -485,10 +490,10 @@ function render() {
   };
 
   // header
-  const chips = projects.length > 1 || API ? `<div class="projbar"><div class="projects">${projects.map(p => {
+  const chips = projects.length > 1 || API ? `<div class="projbar"><button class="pscroll" data-pscroll="-1" hidden></button><div class="projects">${projects.map(p => {
     const n = p.status.waiting.filter(w => w.status === "open").length;
     return `<button data-project="${esc(p.id)}" class="${p.id === P.id ? "on" : ""}"><span class="dot" style="--c:${pulseOf(p).c}"></span>${esc(p.status.project.name)}${n ? `<span class="n">${n}</span>` : ""}</button>`;
-  }).join("")}</div>${API ? `<button class="addp" id="newproj" title="${L("新建项目：建文件夹、接入跟踪，并在终端里启动 agent", "New project: create a folder, track it, and start your agent in a terminal")}">＋</button>` : ""}</div>` : "";
+  }).join("")}</div><button class="pscroll" data-pscroll="1" hidden></button>${API ? `<button class="addp" id="newproj" title="${L("新建项目：建文件夹、接入跟踪，并在终端里启动 agent", "New project: create a folder, track it, and start your agent in a terminal")}">＋</button>` : ""}</div>` : "";
   const head = `<div class="head">
     <div class="head-top"><h1 title="${esc(P.path)}">${esc(S.project.name)}</h1><span class="spacer"></span>
       ${API ? `<span class="sessbtns">
@@ -763,16 +768,37 @@ let projectsShown = null;
 function fitProjects() {
   const el = document.querySelector(".projects");
   if (!el) return;
+  const indicators = () => {
+    el.classList.toggle("fade-l", el.scrollLeft > 2);
+    el.classList.toggle("fade-r", el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+    // A chip counts as out of view when less than half of it shows.
+    const box = el.getBoundingClientRect();
+    let left = 0, right = 0;
+    for (const c of el.querySelectorAll("button")) {
+      const r = c.getBoundingClientRect(), mid = r.left + r.width / 2;
+      if (mid < box.left) left++; else if (mid > box.right) right++;
+    }
+    for (const b of document.querySelectorAll("[data-pscroll]")) {
+      const back = b.dataset.pscroll === "-1", n = back ? left : right;
+      b.hidden = !n;
+      b.textContent = back ? `‹ ${n}` : `${n} ›`;
+      b.title = L(`${back ? "左边" : "右边"}还有 ${n} 个项目`, `${n} more project${n > 1 ? "s" : ""} this way`);
+    }
+  };
+  indicators();
   const on = el.querySelector("button.on");
-  if (on && projectsShown !== state.project) {
+  if (on && projectsShown !== state.project) {  // after the indicators: they take room from the row
     projectsShown = state.project;
     const l = on.offsetLeft - el.offsetLeft, r = l + on.offsetWidth;
     if (l < el.scrollLeft) el.scrollLeft = l - 8;
     else if (r > el.scrollLeft + el.clientWidth) el.scrollLeft = r - el.clientWidth + 8;
+    indicators();
   }
-  el.classList.toggle("fade-l", el.scrollLeft > 2);
-  el.classList.toggle("fade-r", el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
 }
+document.addEventListener("click", e => {
+  const b = e.target.closest?.("[data-pscroll]"), el = document.querySelector(".projects");
+  if (b && el) el.scrollBy({ left: +b.dataset.pscroll * el.clientWidth * 0.8, behavior: "smooth" });
+});
 document.addEventListener("scroll", e => { if (e.target.classList?.contains("projects")) fitProjects(); }, true);
 document.addEventListener("wheel", e => {
   const el = e.target.closest?.(".projects");
