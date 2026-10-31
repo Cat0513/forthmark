@@ -1,0 +1,374 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://Forthmark.local/status.schema.json",
+  "title": "Project status",
+  "description": "Human-facing project status, maintained by the user's coding agent. Markdown docs stay the agent's source of detail; this file holds only what a human needs at a glance.",
+  "type": "object",
+  "required": [
+    "version",
+    "project",
+    "updated_at",
+    "tasks",
+    "waiting",
+    "bugs",
+    "decisions",
+    "timeline"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "goal": {
+          "type": "string",
+          "description": "One sentence: what 'done' means for this project."
+        }
+      }
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "deadline": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "milestones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^m[0-9]+$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "active",
+              "done"
+            ]
+          },
+          "due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          }
+        }
+      }
+    },
+    "next": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "The single most useful thing to do next that is NOT blocked.",
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "task": {
+          "type": "string",
+          "pattern": "^t[0-9]+$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "description": "Blocked-ness is NOT stored here; it is derived from open waiting items and open bugs that reference the task.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^t[0-9]+$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "todo",
+              "doing",
+              "paused",
+              "done",
+              "dropped"
+            ]
+          },
+          "milestone": {
+            "type": "string",
+            "pattern": "^m[0-9]+$"
+          },
+          "ref": {
+            "type": "string",
+            "description": "Path (optionally #anchor) to the md that holds the details."
+          },
+          "note": {
+            "type": "string",
+            "description": "Where to pick up again (written when pausing)."
+          },
+          "paused_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "changed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Last status change."
+          },
+          "urgent": {
+            "type": "boolean",
+            "description": "Jumped the queue (interrupted other work)."
+          }
+        }
+      }
+    },
+    "waiting": {
+      "type": "array",
+      "description": "Anything progress depends on that someone (including the user) has to answer, confirm or deliver.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "question",
+          "waiting_on",
+          "since",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^w[0-9]+$"
+          },
+          "question": {
+            "type": "string"
+          },
+          "waiting_on": {
+            "enum": [
+              "me",
+              "client",
+              "teammate",
+              "external"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "decide",
+              "do"
+            ],
+            "description": "Only for waiting_on=me: 'decide' = the user must make a call, 'do' = the user must go do something. Defaults to decide."
+          },
+          "who": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string",
+            "format": "date"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^t[0-9]+$"
+            }
+          },
+          "message_draft": {
+            "type": "string",
+            "description": "Ready-to-send message the user can copy to whoever is being waited on."
+          },
+          "status": {
+            "enum": [
+              "open",
+              "resolved"
+            ]
+          },
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolved_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "check": {
+            "type": "string",
+            "description": "For kind=do: read-only condition proving it's done, e.g. 'contains:~/.claude/settings.json:UserPromptSubmit && exists:dist/app'. Kinds: exists:PATH, missing:PATH, contains:PATH:TEXT. Relative paths are inside the project."
+          }
+        }
+      }
+    },
+    "bugs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "severity",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^b[0-9]+$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "status": {
+            "enum": [
+              "open",
+              "fixing",
+              "fixed",
+              "wontfix"
+            ]
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^t[0-9]+$"
+            }
+          },
+          "ref": {
+            "type": "string"
+          },
+          "closed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "date",
+          "decision"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "from_waiting": {
+            "type": "string",
+            "pattern": "^w[0-9]+$"
+          },
+          "ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "timeline": {
+      "type": "array",
+      "description": "Newest first, keep at most 30 entries.",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "required": [
+          "at",
+          "type",
+          "text"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "type": {
+            "enum": [
+              "done",
+              "added",
+              "waiting",
+              "resolved",
+              "bug",
+              "fixed",
+              "decision",
+              "note"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

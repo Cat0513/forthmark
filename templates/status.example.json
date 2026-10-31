@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "project": {
+    "name": "订单后台 · 报表导出",
+    "goal": "运营可以按条件筛选订单并导出报表，11 月中旬上线"
+  },
+  "updated_at": "2026-10-27T19:30:00+08:00",
+  "deadline": "2026-11-15",
+  "milestones": [
+    { "id": "m1", "title": "方案", "status": "done" },
+    { "id": "m2", "title": "开发", "status": "active", "due": "2026-11-08" },
+    { "id": "m3", "title": "联调验收", "status": "pending", "due": "2026-11-15" }
+  ],
+  "next": {
+    "task": "t6",
+    "title": "前端筛选面板",
+    "why": "t4 被跨月漏数据 bug 卡住，前端可以先按接口约定开发"
+  },
+  "tasks": [
+    { "id": "t1", "title": "梳理导出字段与权限", "status": "done", "milestone": "m1", "ref": "docs/export-spec.md" },
+    { "id": "t2", "title": "导出任务队列", "status": "done", "milestone": "m2" },
+    { "id": "t3", "title": "报表模板（Excel）", "status": "todo", "milestone": "m2", "ref": "docs/export-spec.md#报表模板" },
+    { "id": "t4", "title": "订单筛选接口加分页", "status": "doing", "milestone": "m2" },
+    { "id": "t5", "title": "导出文件下载与过期清理", "status": "todo", "milestone": "m2" },
+    { "id": "t6", "title": "前端筛选面板", "status": "todo", "milestone": "m2" },
+    { "id": "t7", "title": "测试环境联调", "status": "todo", "milestone": "m3" }
+  ],
+  "waiting": [
+    {
+      "id": "w1",
+      "question": "导出是否需要支持 Excel，还是只要 CSV？",
+      "waiting_on": "client",
+      "who": "甲方产品 王经理",
+      "since": "2026-10-24",
+      "blocks": ["t3"],
+      "message_draft": "王经理您好，关于订单报表导出想确认一下：只需要 CSV，还是也需要 Excel（含多 sheet 与格式）？这会影响报表模板的实现，我们这边需要在 10/31 前确定，谢谢！",
+      "status": "open",
+      "ref": "docs/export-spec.md#待确认"
+    },
+    {
+      "id": "w2",
+      "question": "测试环境的对象存储权限",
+      "waiting_on": "teammate",
+      "who": "运维 小陈",
+      "since": "2026-10-27",
+      "blocks": ["t5", "t7"],
+      "message_draft": "小陈，报表导出需要测试环境 OSS 的读写权限（bucket: report-test），方便的时候帮开一下，影响下载功能联调，谢谢～",
+      "status": "open"
+    },
+    {
+      "id": "w3",
+      "question": "导出文件保留几天？",
+      "waiting_on": "me",
+      "since": "2026-10-27",
+      "blocks": ["t5"],
+      "status": "open"
+    },
+    {
+      "id": "w4",
+      "question": "导出是否需要按角色限制字段？",
+      "waiting_on": "client",
+      "who": "甲方产品 王经理",
+      "since": "2026-10-20",
+      "status": "resolved",
+      "answer": "财务角色可见金额字段，其他角色隐藏",
+      "resolved_at": "2026-10-23"
+    }
+  ],
+  "bugs": [
+    { "id": "b1", "title": "筛选时间跨月时漏数据", "severity": "high", "status": "open", "blocks": ["t4"] },
+    { "id": "b2", "title": "导出文件名中文乱码", "severity": "low", "status": "fixed" }
+  ],
+  "decisions": [
+    { "date": "2026-10-23", "decision": "金额字段仅财务角色可见", "from_waiting": "w4" },
+    { "date": "2026-10-22", "decision": "导出走异步任务队列，不同步生成", "reason": "大数据量会超时" }
+  ],
+  "timeline": [
+    { "at": "2026-10-27T19:30:00+08:00", "type": "waiting", "text": "新增等待：导出文件保留几天（等你决定）" },
+    { "at": "2026-10-27T19:00:00+08:00", "type": "bug", "text": "发现 bug：筛选时间跨月漏数据" },
+    { "at": "2026-10-27T18:00:00+08:00", "type": "waiting", "text": "等运维开测试环境 OSS 权限" },
+    { "at": "2026-10-27T16:30:00+08:00", "type": "done", "text": "完成导出任务队列" },
+    { "at": "2026-10-24T10:00:00+08:00", "type": "waiting", "text": "向甲方确认是否需要 Excel" }
+  ]
+}

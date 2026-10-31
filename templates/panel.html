@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forthmark</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%22-8%20-20%20144%20144%22%3E%3Cstyle%3Epath%7Bfill%3A%23111%7D%40media%28prefers-color-scheme%3Adark%29%7Bpath%7Bfill%3A%23eee%7D%7D%3C/style%3E%3Cpath%20d%3D%22M0%200H20V32H0Z%20M0%2044H20V76H0Z%20M0%2088H12L20%2096L12%20104H0Z%20M32%200H112L128%2016L112%2032H32Z%20M32%2044H88L104%2060L88%2076H32Z%22/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f4f6fa; --card: #ffffff; --sunk: #f6f8fb; --ink: #0f172a; --ink2: #475569; --ink3: #94a3b8;
+  --line: #e5e9f0; --line2: #eef1f5;
+  --green: #059669; --green-bg: #ecfdf5; --green-line: #a7f3d0;
+  --blue: #2563eb; --blue-bg: #eff6ff;
+  --amber: #b45309; --amber-bg: #fffbeb; --amber-line: #fcd34d;
+  --red: #dc2626; --red-bg: #fef2f2; --red-line: #fca5a5;
+  --heat0: #e8edf3; --heat1: #a7f3d0; --heat2: #6ee7b7; --heat3: #10b981; --heat4: #047857;
+  --shadow: 0 1px 2px rgba(15,23,42,.04), 0 4px 12px -4px rgba(15,23,42,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0f16; --card: #141a23; --sunk: #10151d; --ink: #e6ebf2; --ink2: #a3adbd; --ink3: #6b7587;
+    --line: #232b37; --line2: #1b222c;
+    --green: #34d399; --green-bg: #0f2a22; --green-line: #1f5a46;
+    --blue: #7aa2ff; --blue-bg: #14213d;
+    --amber: #fbbf24; --amber-bg: #2a2010; --amber-line: #5c4615;
+    --red: #f87171; --red-bg: #2c1515; --red-line: #6b2a2a;
+    --heat0: #1c2430; --heat1: #134e3a; --heat2: #166b4d; --heat3: #1f9a6a; --heat4: #34d399;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b0f16; --card: #141a23; --sunk: #10151d; --ink: #e6ebf2; --ink2: #a3adbd; --ink3: #6b7587;
+  --line: #232b37; --line2: #1b222c;
+  --green: #34d399; --green-bg: #0f2a22; --green-line: #1f5a46;
+  --blue: #7aa2ff; --blue-bg: #14213d;
+  --amber: #fbbf24; --amber-bg: #2a2010; --amber-line: #5c4615;
+  --red: #f87171; --red-bg: #2c1515; --red-line: #6b2a2a;
+  --heat0: #1c2430; --heat1: #134e3a; --heat2: #166b4d; --heat3: #1f9a6a; --heat4: #34d399;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+
+/* Scrollbars: thin, rounded, no visible track, like macOS overlay scrollbars */
+::-webkit-scrollbar { width: 11px; height: 11px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { border-radius: 999px; border: 3px solid transparent; background-clip: content-box;
+  background-color: rgba(127, 127, 127, .28); }
+::-webkit-scrollbar-thumb:hover { background-color: rgba(127, 127, 127, .5); }
+
+/* In the menu bar popover: the page is transparent over the system's translucent material */
+:root.glass { --ink: #0b1220; --ink2: #334155; --ink3: #586274;
+  --bg: transparent; --card: rgba(255,255,255,.58); --sunk: rgba(255,255,255,.38);
+  --line: rgba(255,255,255,.62); --line2: rgba(15,23,42,.07);
+  --shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 6px 18px -10px rgba(15,23,42,.25); }
+@media (prefers-color-scheme: dark) {
+  :root.glass:not([data-theme="light"]) { --ink: #f1f4f9; --ink2: #c6cdd9; --ink3: #939eb1;
+    --card: rgba(36,42,54,.46); --sunk: rgba(255,255,255,.06);
+    --line: rgba(255,255,255,.12); --line2: rgba(255,255,255,.07);
+    --shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 6px 18px -10px rgba(0,0,0,.5); }
+}
+:root.glass[data-theme="dark"] { --ink: #f1f4f9; --ink2: #c6cdd9; --ink3: #939eb1;
+  --card: rgba(36,42,54,.46); --sunk: rgba(255,255,255,.06);
+  --line: rgba(255,255,255,.12); --line2: rgba(255,255,255,.07);
+  --shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 6px 18px -10px rgba(0,0,0,.5); }
+:root.glass, :root.glass body { background: transparent; }
+:root.glass .card { backdrop-filter: saturate(170%) blur(14px); -webkit-backdrop-filter: saturate(170%) blur(14px); }
+:root.glass .tabs { background: rgba(127,127,127,.12); border-color: transparent; }
+/* popover density: tighter spacing, one-line goal */
+:root.glass .app { gap: 10px; padding-top: 14px; }
+:root.glass .scroller { gap: 9px; padding-bottom: 12px; }
+:root.glass .card { padding: 11px 12px; border-radius: 12px; }
+:root.glass .ctitle { margin-bottom: 7px; }
+:root.glass .goal { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+:root.glass .footer { display: none; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: clip; }  /* clip, not hidden: hidden breaks the sticky top bar */
+body { font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.mono { font-family: "SF Mono", ui-monospace, Menlo, "PingFang SC", monospace; font-size: 11px; }
+button { font: inherit; cursor: pointer; }
+.muted { color: var(--ink2); } .faint { color: var(--ink3); }
+
+.app { max-width: 1240px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.app > * { min-width: 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; box-shadow: var(--shadow); min-width: 0; }
+.ctitle { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.ctitle h2 { margin: 0; font-size: 14px; font-weight: 650; display: flex; align-items: center; gap: 6px; }
+.pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.empty { color: var(--ink3); font-size: 12px; padding: 6px 0; }
+
+/* header */
+.head { display: flex; flex-direction: column; gap: 8px; }
+.head-top { display: flex; align-items: center; gap: 10px; }
+.head h1 { font-size: 16px; margin: 0; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goal { color: var(--ink2); font-size: 12px; }
+.pulse { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--sunk);
+  border: 1px solid var(--line); font-size: 12px; white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); position: relative; flex: none; display: inline-block; }
+.dot.live::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--c); animation: ping 1.8s ease-out infinite; }
+@keyframes ping { from { opacity: .8; transform: scale(.6); } to { opacity: 0; transform: scale(1.7); } }
+.iconbtn { border: 1px solid var(--line); background: var(--card); color: var(--ink2); border-radius: 8px; width: 28px; height: 28px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center; }
+.iconbtn:hover { color: var(--ink); border-color: var(--ink3); }
+/* quiet corner button (popover): no frame until hovered */
+.iconbtn.ghost { width: 22px; height: 22px; border: 0; background: transparent; color: var(--ink3); border-radius: 6px; }
+.iconbtn.ghost:hover { background: rgba(127,127,127,.16); color: var(--ink); }
+.projects { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.projects button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card);
+  color: var(--ink2); border-radius: 999px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
+.projects button.on { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
+.projects .n { font-size: 10px; background: var(--amber-bg); color: var(--amber); border-radius: 999px; padding: 0 5px; }
+
+@media (max-width: 899px) { .pulse.cost { display: none; } }  /* the popover keeps room for the project name */
+
+/* frozen top bar: project, status, switcher (+ tabs on narrow) stay put while content scrolls */
+.topbar { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.scroller { display: contents; }
+.scrolled .topbar .goal { display: none; }
+/* narrow (popover / HUD): the header is its own fixed block; content scrolls in its own area and
+   fades out at its top edge instead of sliding under a header, so the header can stay transparent */
+@media (max-width: 899px) {
+  html, body { height: 100%; overflow: hidden; }
+  .app { height: 100vh; padding-bottom: 0; }
+  .topbar { flex: none; }
+  .scroller { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; overflow-y: auto;
+    margin: 0 -16px; padding: 6px 5px 16px 16px;  /* right padding + 11px scrollbar = 16px: cards line up with the header */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 18px); }
+}
+
+.projects .addp { padding: 3px 10px; color: var(--ink3); border-style: dashed; }
+.projects .addp:hover { color: var(--blue); border-color: var(--blue); }
+.contbtn { border: 1px solid var(--green-line); background: var(--green-bg); color: var(--green); border-radius: 999px;
+  padding: 3px 11px; font-size: 12px; font-weight: 600; white-space: nowrap; flex: none; }
+.contbtn:hover { filter: brightness(.97); }
+.sessbtns { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.sessbtns .iconbtn.ghost { font-size: 13px; width: 26px; height: 26px; }
+.sessbtns .iconbtn.ghost.go { color: var(--green); }
+.sessbtns .iconbtn.ghost.go:hover { background: var(--green-bg); color: var(--green); }
+/* new project dialog */
+.modal { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-start; justify-content: center;
+  padding: 10vh 16px 16px; background: rgba(15,23,42,.28); }
+.modal form { width: min(480px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px; box-shadow: 0 20px 50px -20px rgba(15,23,42,.45); display: flex; flex-direction: column; gap: 10px; }
+:root.glass .modal form { background: #fbfbfc; }
+@media (prefers-color-scheme: dark) { :root.glass .modal form { background: #22262e; } }
+.modal h3 { margin: 0 0 2px; font-size: 15px; }
+.modal label { font-size: 12px; color: var(--ink2); display: flex; flex-direction: column; gap: 4px; }
+.modal input[type=text], .modal textarea { font: inherit; font-size: 13px; color: var(--ink); background: var(--sunk);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
+.modal textarea { min-height: 76px; resize: vertical; }
+.modal .hint { font-size: 11px; color: var(--ink3); }
+.modal .row2 { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.modal .row2 button { padding: 5px 14px; font-size: 12.5px; }
+
+/* tabs (narrow only) */
+.tabs { display: flex; gap: 4px; background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.tabs button { flex: 1; border: 0; background: transparent; color: var(--ink2); border-radius: 7px; padding: 5px 0; font-size: 12px; }
+.tabs button.on { background: var(--green); color: #fff; font-weight: 600; }
+
+/* 做到哪 */
+.big { font-size: 22px; font-weight: 700; color: var(--green); letter-spacing: -.02em; }
+.sub { font-size: 12px; color: var(--ink2); margin: -4px 0 8px; }
+.bar { height: 6px; border-radius: 3px; background: var(--line2); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--green); border-radius: 3px; transition: width .6s; }
+.ms { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
+.ms span { padding: 2px 9px; border-radius: 999px; font-size: 11px; border: 1px solid var(--line); color: var(--ink3); }
+.ms span.done { color: var(--green); background: var(--green-bg); border-color: var(--green-line); }
+.ms span.active { color: #fff; background: var(--blue); border-color: var(--blue); }
+.foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; }
+.ok { color: var(--green); }
+
+/* 现在在做 */
+.now-row { display: flex; align-items: center; gap: 7px; padding: 5px 0; font-size: 12.5px; min-width: 0; }
+.now-row .nt { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-row.paused .nt { font-weight: 500; color: var(--ink2); }
+.now-row .ptag { width: 8px; text-align: center; font-size: 10px; color: var(--ink3); }
+.pnote { font-size: 11.5px; color: var(--ink2); margin: -2px 0 4px 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 卡在谁 */
+.wait .summary { font-size: 11.5px; color: var(--ink2); margin: -4px 0 8px; }
+.filters { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+.filters button { border: 1px solid var(--line); background: transparent; color: var(--ink2); border-radius: 999px; padding: 1px 9px; font-size: 11px; }
+.filters button.on { background: var(--ink); color: var(--card); border-color: var(--ink); }
+.wlist { display: grid; gap: 6px; }
+.witem { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--card); min-width: 0; }
+.witem.late { border-color: var(--red-line); background: var(--red-bg); }
+.witem .q { font-weight: 600; font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.witem .meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; color: var(--ink3); margin-top: 5px; }
+.witem .meta .blk { color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.witem .meta .free { flex: 1; }
+.witem .acts { margin-left: auto; }
+.witem .act { padding: 1px 9px; font-size: 11.5px; }
+.witem .pill { font-weight: 500; }
+.more { width: 100%; border: 1px dashed var(--line); background: transparent; color: var(--ink2); border-radius: 8px; padding: 5px; font-size: 12px; margin-top: 6px; }
+.act { border: 1px solid var(--line); background: var(--card); color: var(--blue); border-radius: 7px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
+.act.primary { background: var(--green); border-color: var(--green); color: #fff; font-weight: 600; }
+.acts { display: inline-flex; gap: 6px; flex: none; }
+.mini { border: 1px solid var(--line); background: var(--card); color: var(--ink2); border-radius: 6px; padding: 1px 8px; font-size: 11px; flex: none; align-self: center; }
+.mini:hover, .act:hover { border-color: var(--blue); color: var(--blue); }
+.act.primary:hover { color: #fff; filter: brightness(1.08); }
+.lab-me { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-line); }
+.lab-other { background: var(--sunk); color: var(--ink2); border: 1px solid var(--line); }
+.lab-late { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-line); }
+
+/* 下一步 */
+.next .label { font-size: 11px; font-weight: 600; margin-bottom: 2px; }
+.next .box { border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; }
+.next .box:last-child { margin-bottom: 0; }
+.next .doing { background: var(--green-bg); border: 1px solid var(--green-line); }
+.next .doing .label { color: var(--green); }
+.next .upnext { background: var(--blue-bg); }
+.next .upnext .label { color: var(--blue); }
+.next .t { font-size: 14px; font-weight: 650; }
+.next .why { font-size: 12px; color: var(--ink2); margin-top: 2px; }
+
+/* 推进节奏 */
+.cad { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 14px; align-items: center; }
+.metric b { font-size: 20px; font-weight: 700; display: block; line-height: 1.1; letter-spacing: -.02em; white-space: nowrap; }
+.metric b.g { color: var(--green); }
+.metric span { font-size: 11px; color: var(--ink2); white-space: nowrap; }
+.heatwrap { --cell: 14px; width: max-content; max-width: 100%; min-width: 0; }
+.heat { display: grid; gap: 3px; }
+/* cells are 14px squares, shrinking (still square) when the row is too narrow, e.g. the popover */
+.heat i { width: 100%; max-width: var(--cell); aspect-ratio: 1; border-radius: 3px; background: var(--heat0); display: block; min-width: 0; }
+.life { font-size: 11px; color: var(--ink2); margin-top: 4px; }
+.heat i.today { outline: 1.5px solid var(--blue); outline-offset: 1px; }
+
+.heatlab { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink3); margin-top: 3px; }
+.burnwrap { grid-column: 1 / -1; }
+.legend { display: inline-flex; gap: 12px; }
+.legend .sw { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--green); vertical-align: middle; margin-right: 4px; }
+.legend .sw.dash { border-top: 1.5px dashed var(--ink3); }
+@media (max-width: 899px) {  /* narrow: the strip gets its own row so it never pushes past the card */
+  .cad { grid-template-columns: auto 1fr; }
+  .heatwrap { grid-column: 1 / -1; width: 100%; }
+}
+svg.burn { width: 100%; height: 44px; display: block; }
+
+/* 任务 */
+.grp { font-size: 12px; font-weight: 600; color: var(--ink2); margin: 10px 0 6px; display: flex; align-items: center; gap: 6px; }
+.task { min-width: 0; display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; }
+.task .id { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 6px;
+  background: var(--sunk); color: var(--ink2); flex: none; }
+.task.doing { background: var(--green-bg); border-color: var(--green-line); }
+.task.doing .id { background: var(--card); color: var(--green); }
+.task.blocked { border-style: dashed; }
+.task .tag { font-size: 11px; color: var(--amber); margin-top: 3px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.blink { border: 0; background: none; padding: 0; font: inherit; font-size: 11px; color: var(--amber); cursor: pointer; text-align: left;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.blink:hover { text-decoration: underline; }
+.blink .who { color: var(--ink3); }
+.wid { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 10.5px; font-weight: 600; }
+.witem .wid { color: var(--ink3); }
+@keyframes flash { 0%, 60% { box-shadow: 0 0 0 3px var(--blue); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.flash { animation: flash 1.6s ease-out; }
+.task.done { color: var(--ink3); }
+details summary { cursor: pointer; font-size: 12px; color: var(--ink2); list-style: none; padding: 6px 0 4px; }
+details summary::-webkit-details-marker { display: none; }
+details summary::before { content: "▸ "; }
+details[open] summary::before { content: "▾ "; }
+
+/* 动态 / Bug rows */
+.row { display: flex; gap: 8px; align-items: baseline; padding: 6px 4px; border-bottom: 1px solid var(--line2); font-size: 12.5px; }
+.row:last-child { border-bottom: 0; }
+.row .when { color: var(--ink3); font-size: 11px; min-width: 64px; flex: none; }
+.row .k { flex: none; width: 18px; text-align: center; }
+.row .txt { flex: 1; min-width: 0; }
+.row.new { background: var(--blue-bg); border-radius: 8px; }
+.a-feed .row .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge { font-size: 10px; padding: 0 6px; border-radius: 999px; background: var(--blue); color: #fff; font-weight: 600; flex: none; }
+.sev { font-size: 10px; padding: 0 6px; border-radius: 4px; font-weight: 600; flex: none; border: 1px solid currentColor; }
+
+.footer .mono { overflow-wrap: anywhere; min-width: 0; }
+.footer { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--ink3); padding: 0 4px; }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--card);
+  padding: 7px 14px; border-radius: 999px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+
+/* 文档 */
+.dtools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.dtools input { flex: 1; min-width: 140px; border: 1px solid var(--line); background: var(--sunk); color: var(--ink);
+  border-radius: 8px; padding: 4px 9px; font: inherit; font-size: 12px; }
+.chip { border: 1px solid var(--line); background: transparent; color: var(--ink2); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+.chip.on { background: var(--ink); color: var(--card); border-color: var(--ink); }
+.doc { display: flex; gap: 8px; align-items: center; padding: 6px 6px; border-radius: 8px; cursor: pointer; }
+.doc:hover { background: var(--sunk); }
+.doc .ic { width: 18px; text-align: center; flex: none; color: var(--ink3); font-size: 12px; }
+.doc .main { flex: 1; min-width: 0; }
+.doc .nm { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc .nm .dir { color: var(--ink3); font-weight: 400; }
+.doc .ds { font-size: 11.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc .side { display: flex; gap: 5px; align-items: center; flex: none; font-size: 11px; color: var(--ink3); }
+.dtag { font-size: 10.5px; padding: 0 6px; border-radius: 999px; background: var(--blue-bg); color: var(--blue); }
+.upd { font-size: 10.5px; padding: 0 6px; border-radius: 999px; background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-line); }
+.syn { font-size: 10.5px; padding: 0 6px; border-radius: 999px; background: var(--green-bg); color: var(--green); }
+.minibar { width: 54px; height: 4px; border-radius: 2px; background: var(--line2); overflow: hidden; display: inline-block; }
+.minibar span { display: block; height: 100%; background: var(--green); }
+.dgrp { font-size: 11px; font-weight: 600; color: var(--ink3); margin: 10px 6px 2px; letter-spacing: .02em; }
+.sources { background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 4px; margin-bottom: 6px; }
+.doccols { columns: 2 340px; column-gap: 18px; }
+.doccols > div { break-inside: avoid; }
+
+/* a window showing one document: the drawer is the page */
+.docview .app { display: none; }
+.docview .drawer { width: 100%; transform: none; transition: none; border-left: 0; box-shadow: none; }
+.docview #dclose { display: none; }
+
+/* 预览侧栏 */
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(780px, 100%); background: var(--card); border-left: 1px solid var(--line);
+  box-shadow: -12px 0 32px rgba(15,23,42,.12); transform: translateX(100%); transition: transform .2s; z-index: 10; display: flex; flex-direction: column; }
+.drawer.open { transform: none; }
+.drawer .dh { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.drawer .dh .row1 { display: flex; align-items: center; gap: 8px; }
+.drawer .dh h3 { margin: 0; font-size: 15px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawer .dh .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.drawer .db { overflow: auto; padding: 16px 20px 40px; flex: 1; }
+.drawer .db pre.raw { white-space: pre-wrap; font: 12px/1.55 "SF Mono", ui-monospace, Menlo, monospace; margin: 0; }
+.drawer .note { background: var(--amber-bg); border: 1px solid var(--amber-line); border-radius: 8px; padding: 6px 10px; font-size: 12px; }
+/* github-markdown-css follows the *system* scheme; re-point its variables at the panel's own tokens
+   so the preview follows the panel's theme toggle too. */
+.drawer .markdown-body {
+  color-scheme: light; background: transparent !important; color: var(--ink); font-size: 14px;
+  --fgColor-default: var(--ink); --fgColor-muted: var(--ink2); --fgColor-accent: var(--blue);
+  --fgColor-success: var(--green); --fgColor-attention: var(--amber); --fgColor-danger: var(--red); --fgColor-done: #8250df;
+  --bgColor-default: var(--card); --bgColor-muted: var(--sunk); --bgColor-neutral-muted: rgba(127, 127, 127, .16);
+  --bgColor-attention-muted: var(--amber-bg);
+  --borderColor-default: var(--line); --borderColor-muted: var(--line2); --borderColor-neutral-muted: var(--line);
+  --borderColor-accent-emphasis: var(--blue); --borderColor-success-emphasis: var(--green);
+  --borderColor-attention-emphasis: var(--amber); --borderColor-danger-emphasis: var(--red); --borderColor-done-emphasis: #8250df;
+  --focus-outlineColor: var(--blue);
+}
+:root[data-theme="dark"] .drawer .markdown-body { color-scheme: dark; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .drawer .markdown-body { color-scheme: dark; } }
+
+/* narrow: HUD, one tab at a time */
+.panes { display: flex; flex-direction: column; gap: 12px; }
+.side, .mainL { display: contents; }
+.app[data-tab="overview"] .mainL > :not([data-pane="overview"]),
+.app[data-tab="board"] .mainL > :not([data-pane="board"]),
+.app[data-tab="feed"] .mainL > :not([data-pane="feed"]),
+.app[data-tab="docs"] .mainL > * ,
+.app[data-tab="overview"] .side > :not([data-pane="overview"]),
+.app[data-tab="board"] .side > :not([data-pane="board"]),
+.app[data-tab="feed"] .side > :not([data-pane="feed"]),
+.app[data-tab="docs"] .side > * { display: none; }
+.app[data-tab="overview"] .panes > :not([data-pane="overview"]):not(.side):not(.mainL),
+.app[data-tab="board"] .panes > :not([data-pane="board"]):not(.side):not(.mainL),
+.app[data-tab="feed"] .panes > :not([data-pane="feed"]):not(.side):not(.mainL),
+.app[data-tab="docs"] .panes > :not([data-pane="docs"]):not(.side):not(.mainL) { display: none; }
+
+/* wide: everything at once */
+@media (min-width: 900px) {
+  .app { padding: 24px; gap: 16px; }
+  .topbar { position: sticky; top: 0; z-index: 5; margin: -24px -24px 0; padding: 18px 24px 12px; background: var(--bg); }
+  .scrolled .topbar { box-shadow: 0 1px 0 var(--line), 0 8px 16px -14px rgba(15,23,42,.25); }
+  .tabs { display: none; }
+  .head h1 { font-size: 20px; flex: 0 1 auto; }
+  .head-top .spacer { flex: 1; }
+  .panes { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas: "where wait next" "cad cad cad" "board board side" "docs docs docs"; align-items: start; }
+  .app .panes > :not(.side):not(.mainL), .app .side > *, .app .mainL > * { display: block !important; }
+  .a-where { grid-area: where; } .a-wait { grid-area: wait; } .a-next { grid-area: next; } .a-cad { grid-area: cad; }
+  .a-docs { grid-area: docs; }
+  .mainL { grid-area: board; display: flex !important; flex-direction: column; gap: 16px; min-width: 0; }
+  .a-where, .a-wait, .a-next { align-self: stretch; }
+  .panes.manywait { grid-template-areas: "where wait wait" "next wait wait" "cad cad cad" "board board side" "docs docs docs"; }
+  .a-board .tgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; }
+  .a-board .tgrid .task { margin-bottom: 6px; }
+  .side { grid-area: side; display: flex !important; flex-direction: column; gap: 16px; min-width: 0; }
+  .panes.manywait .a-where, .panes.manywait .a-next { align-self: start; }
+  .panes.manywait .wlist { grid-template-columns: 1fr 1fr; }
+  .cad { grid-template-columns: auto auto auto minmax(0, 1fr); gap: 28px; }
+  .burnwrap { grid-column: auto; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div class="toast" id="toast"></div>
+<aside class="drawer" id="drawer"></aside>
+<script>/*MORPHDOM*/</script>
+<script>
+let DATA = /*DATA*/null/*END*/;
+// Interface language, decided by forthmark.py (config "lang", else the system language). Everything the
+// tool itself says goes through L(zh, en); what agents and users wrote is shown as written.
+const EN = DATA?.lang === "en";
+const L = (zh, en) => EN ? en : zh;
+document.documentElement.lang = EN ? "en" : "zh-CN";
+// Set when served by `forthmark.py open`: buttons then write the status file directly.
+const API = /*API*/null/*END*/;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const daysSince = d => Math.floor((new Date().setHours(0,0,0,0) - new Date(d + "T00:00:00")) / 864e5);
+function ago(iso) {
+  const s = (Date.now() - new Date(iso)) / 1000;
+  if (s < 60) return L("刚刚", "just now");
+  if (s < 3600) return Math.floor(s / 60) + L(" 分钟前", " min ago");
+  if (s < 86400) return Math.floor(s / 3600) + L(" 小时前", " h ago");
+  return Math.floor(s / 86400) + L(" 天前", " d ago");
+}
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+};
+
+// View state survives the 15s reload through the URL hash.
+const hash = new URLSearchParams(location.hash.slice(1));
+// Inside the menu bar app: a bridge for opening native windows.
+const NATIVE = window.webkit?.messageHandlers?.forthmark;
+const DOC_VIEW = hash.get("view") === "doc";  // a window that shows just one document
+if (DOC_VIEW) document.documentElement.classList.add("docview");
+const SHELL = hash.get("shell");  // "popover": shown in the app's translucent menu bar popover
+if (SHELL === "popover") document.documentElement.classList.add("glass");
+const state = { project: hash.get("p"), tab: hash.get("tab") || "overview", filter: hash.get("f") || "all",
+  q: "", tag: "", showHidden: false, doc: hash.get("doc") || null };
+const saveState = () => history.replaceState(null, "", "#" + new URLSearchParams(
+  { p: state.project || "", tab: state.tab, f: state.filter, ...(state.doc ? { doc: state.doc } : {}),
+    ...(DOC_VIEW ? { view: "doc" } : {}), ...(SHELL ? { shell: SHELL } : {}) }));
+
+// Theme: follows the system until toggled.
+function applyTheme() {
+  if (window.webkit?.messageHandlers?.forthmark) return;  // in the app: always follow the system, like its windows do
+  const t = store.get("forthmark-theme");
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+}
+function toggleTheme() {
+  const cur = store.get("forthmark-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  store.set("forthmark-theme", cur === "dark" ? "light" : "dark");
+  applyTheme();
+}
+applyTheme();
+
+const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
+const EXPAND_ICON = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9"/></svg>`;
+const WAIT = EN ? { me: "Your call", client: "Client", teammate: "Teammate", external: "External" }
+  : { me: "等你决定", client: "等甲方", teammate: "等同事", external: "等外部" };
+const waitLabel = w => w.waiting_on === "me" && w.kind === "do" ? L("等你去做", "Your action") : WAIT[w.waiting_on];
+const ICON = { done: "✅", added: "➕", waiting: "⏳", resolved: "🔓", bug: "🐞", fixed: "🔧", decision: "📌", note: "📝" };
+
+function pulseOf(P) {
+  const h = (Date.now() - new Date(P.last_activity)) / 36e5;
+  if (h < 24) return { c: "var(--green)", label: L("推进中", "Moving"), live: true };
+  if (h < 72) return { c: "var(--amber)", label: L("放缓", "Slowing"), live: false };
+  return { c: "var(--red)", label: L("已停滞 " + Math.floor(h / 24) + " 天", "Stalled " + Math.floor(h / 24) + "d"), live: false };
+}
+
+function render() {
+  const app = $("app");
+  app.dataset.tab = state.tab;
+  const projects = DATA.projects;
+  if (!projects.length) {
+    app.innerHTML = `<div class="card"><h2 style="margin:0 0 6px;font-size:15px">${L("还没有跟踪任何项目", "No projects tracked yet")}</h2>
+      <div class="muted">${L(`在项目里打开 Claude Code，输入 <span class="mono">/forthmark-add</span> 即可接入（不会改动项目里的任何文件）。`, `Open Claude Code in a project and type <span class="mono">/forthmark-add</span> (nothing in the project is changed).`)}</div></div>`;
+    return;
+  }
+  const P = projects.find(p => p.id === state.project) || projects[0];
+  state.project = P.id;
+  const S = P.status, blocked = P.blocked;
+  const live = S.tasks.filter(t => t.status !== "dropped");
+  const by = s => live.filter(t => t.status === s);
+  const done = by("done").length;
+  const pct = live.length ? Math.round(done * 100 / live.length) : 0;
+  const taskTitle = id => (S.tasks.find(t => t.id === id) || {}).title || id;
+  const free = live.filter(t => (t.status === "todo" || t.status === "doing") && !blocked[t.id]);
+  const openW = S.waiting.filter(w => w.status === "open");
+  const seen = store.get("forthmark-seen:" + P.id);
+  const isNew = at => seen && new Date(at) > new Date(seen);
+  const pulse = pulseOf(P);
+  // A ref to a doc opens the preview; any other path is just shown.
+  const refLink = ref => {
+    if (!ref) return "";
+    const path = ref.split("#")[0];
+    return (P.docs || []).some(d => d.path === path)
+      ? `<button class="blink" style="flex:none;color:var(--blue)" data-docref="${esc(path)}" title="${esc(ref)}">📄 ${esc(path.split("/").pop())}</button>`
+      : `<span class="mono faint" style="flex:none" title="${esc(ref)}">${esc(path.split("/").pop())}</span>`;
+  };
+
+  // header
+  const chips = projects.length > 1 || API ? `<div class="projects">${projects.map(p => {
+    const n = p.status.waiting.filter(w => w.status === "open").length;
+    return `<button data-project="${esc(p.id)}" class="${p.id === P.id ? "on" : ""}"><span class="dot" style="--c:${pulseOf(p).c}"></span>${esc(p.status.project.name)}${n ? `<span class="n">${n}</span>` : ""}</button>`;
+  }).join("")}${API ? `<button class="addp" id="newproj" title="${L("新建项目：建文件夹、接入跟踪，并在终端里启动 agent", "New project: create a folder, track it, and start your agent in a terminal")}">＋</button>` : ""}</div>` : "";
+  const head = `<div class="head">
+    <div class="head-top"><h1 title="${esc(P.path)}">${esc(S.project.name)}</h1><span class="spacer"></span>
+      ${API ? `<span class="sessbtns">
+        <button class="iconbtn ghost" data-session="new" title="${L(`新会话：在终端里开一个新的 ${esc(DATA.config?.agent || "claude")} 会话（会拿到项目的当前状态）`, `New session: start ${esc(DATA.config?.agent || "claude")} in a terminal (it receives the project status)`)}">＋</button>
+        <button class="iconbtn ghost go" data-session="last" title="${L(`继续：回到最近的会话（由 ${esc(DATA.config?.agent || "claude")} 自己判断哪个最近）`, `Continue: the most recent session (${esc(DATA.config?.agent || "claude")} decides which)`)}">▶</button>
+        <button class="iconbtn ghost" data-session="pick" title="${L(`会话列表：用 ${esc(DATA.config?.agent || "claude")} 自己的列表选一个会话`, `Sessions: pick one from ${esc(DATA.config?.agent || "claude")}'s own list`)}">☰</button>
+      </span>` : ""}
+      <span class="pulse" style="--c:${pulse.c}"><span class="dot ${pulse.live ? "live" : ""}"></span><b style="color:${pulse.c}">${pulse.label}</b>
+        <span class="faint">${L("最近推进", "last progress")} <span data-ago="${P.last_activity}">${ago(P.last_activity)}</span></span></span>
+      ${P.usage?.total ? `<span class="pulse cost" title="${L(`因本工具拦截而多出的轮次：${fmtTok(P.usage.overhead)} tokens（精确）\n+ 未计入：会话开始注入的规则与状态、agent 日常更新状态的少量开销\n本项目会话共 ${fmtTok(P.usage.total)} tokens（只算新增 token，不含缓存读取）`, `Extra turns caused by this tool: ${fmtTok(P.usage.overhead)} tokens (exact)\n+ not counted: rules and status injected at session start, the agent's routine status updates\nAll sessions in this project: ${fmtTok(P.usage.total)} tokens (new tokens only, no cache reads)`)}">
+        <span class="faint">${L("工具开销", "tool overhead")}</span> <b>${fmtTok(P.usage.overhead)}+</b> <span class="faint">· ${(P.usage.overhead * 100 / P.usage.total).toFixed(1)}%</span></span>` : ""}
+      ${!NATIVE ? `<button class="iconbtn" id="theme" title="${L("切换深浅色", "Toggle light / dark")}">◐</button>`
+        : SHELL === "popover" ? `<button class="iconbtn ghost" id="expand" title="${L("在窗口中打开（⌥ 点击菜单栏图标也可以）", "Open in a window (or ⌥-click the menu bar icon)")}">${EXPAND_ICON}</button>` : ""}</div>
+    ${S.project.goal ? `<div class="goal">${esc(S.project.goal)}</div>` : ""}${chips}</div>`;
+  const tabs = `<div class="tabs">${[["overview", L("总览", "Overview")], ["board", L("任务", "Tasks")], ["feed", L("动态", "Activity")], ["docs", L("文档", "Docs")]].map(([k, l]) =>
+    `<button data-tab="${k}" class="${state.tab === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
+
+  // 做到哪
+  const active = (S.milestones || []).find(m => m.status === "active");
+  const dl = S.deadline ? `<span style="color:${-daysSince(S.deadline) <= 3 ? "var(--red)" : "var(--ink2)"}">deadline ${S.deadline} · ${L(`剩 ${-daysSince(S.deadline)} 天`, `${-daysSince(S.deadline)} days left`)}</span>` : "";
+  const STALE_DAYS = 3;
+  const doingRow = t => {
+    const d = t.changed_at ? daysSince(t.changed_at) : 0;
+    const stale = d >= STALE_DAYS;
+    return `<div class="now-row"><span class="dot live" style="--c:var(--green)"></span><span class="mono faint">${esc(t.id)}</span>
+      <span class="nt">${esc(t.title)}</span>
+      ${t.urgent ? `<span class="pill lab-me" title="${L("插队处理，打断了别的工作", "Urgent: interrupted other work")}">${L("⚡插队", "⚡Urgent")}</span>` : ""}
+      ${blocked[t.id] ? `<button class="blink" style="flex:none" data-goto="${esc(blocked[t.id][0])}" title="${L(`这个任务还被 ${blocked[t.id].join("、")} 卡着`, `Still blocked by ${blocked[t.id].join(", ")}`)}">${L(`⛔ 仍被 ${blocked[t.id].length} 项卡着`, `⛔ blocked by ${blocked[t.id].length}`)}</button>` : ""}
+      ${stale ? `<span class="faint" style="color:var(--amber)" title="${L(`进行了 ${d} 天没变化，可能已搁置？可以暂停并写下恢复要点`, `No change for ${d} days. Stalled? You can pause it with a resume note`)}">${L(`进行 ${d} 天`, `${d}d in progress`)}</span>`
+              : t.changed_at ? `<span class="faint">${d ? L(d + " 天前开始", `started ${d}d ago`) : L("今天开始", "started today")}</span>` : ""}
+      ${API ? `<button class="mini" data-pause="${esc(t.id)}">${L("暂停", "Pause")}</button>` : ""}</div>`;
+  };
+  const pausedRow = t => {
+    const d = t.paused_at ? daysSince(t.paused_at) : 0;
+    return `<div class="now-row paused"><span class="ptag">⏸</span><span class="mono faint">${esc(t.id)}</span>
+      <span class="nt">${esc(t.title)}</span>
+      <span style="color:${d >= STALE_DAYS ? "var(--amber)" : "var(--ink3)"};flex:none">${L(`已停 ${d} 天`, `paused ${d}d`)}</span>
+      <button class="mini" data-resume="${esc(t.id)}">${L("继续", "Resume")}</button></div>
+      ${t.note ? `<div class="pnote">↳ ${esc(t.note)}</div>` : `<div class="pnote faint">${L("↳ 恢复要点待 agent 补写（下次你在会话里发消息时）", "↳ resume note pending (the agent adds it the next time you message the session)")}</div>`}`;
+  };
+  const doingT = by("doing").sort((a, b) => !!b.urgent - !!a.urgent);
+  // Nothing in progress: show the most recent finish instead of an empty line, so momentum stays visible.
+  const idleRow = () => {
+    const last = S.timeline.find(e => e.type === "done");
+    return last ? `<div class="now-row"><span class="dot" style="--c:var(--ink3)"></span>
+        <span class="nt" style="font-weight:500;color:var(--ink2)" title="${esc(last.text)}">${L("最近完成：", "Recently done: ")}${esc(last.text.replace(/^(完成：|Done: )/, ""))}</span>
+        <span class="faint" style="flex:none">${ago(last.at)}</span></div>`
+      : `<div class="empty">${L("还没有进行中的任务", "Nothing in progress")}</div>`;
+  };
+  const fixingB = S.bugs.filter(b => b.status === "fixing");
+  const fixingRow = b => `<div class="now-row"><span class="dot live" style="--c:var(--red)"></span><span class="mono faint">${esc(b.id)}</span>
+      <span class="nt" title="${esc(b.title)}">🐞 ${esc(b.title)}</span><span class="faint" style="flex:none">${L("修复中", "fixing")}</span>
+      ${API ? `<button class="mini" data-bug="${esc(b.id)}">${L("已修复", "Fixed")}</button>` : ""}</div>`;
+  const pausedT = by("paused").sort((a, b) => (a.paused_at || "").localeCompare(b.paused_at || ""));
+  const where = `<section class="card a-where" data-pane="overview">
+    <div class="ctitle"><h2>🎯 ${L("现在在做", "Now")}</h2><span class="faint" style="font-size:12px">${active ? esc(active.title) + " · " : ""}<b class="big" style="font-size:16px">${pct}%</b></span></div>
+    <div class="bar" style="margin-bottom:10px"><span style="width:${pct}%"></span></div>
+    ${doingT.length || fixingB.length ? doingT.map(doingRow).join("") + fixingB.map(fixingRow).join("") : idleRow()}
+    ${pausedT.length ? `<div class="grp">⏸ ${L("暂停中，回头继续", "Paused")} ${pausedT.length}</div>${pausedT.map(pausedRow).join("")}` : ""}
+    <div class="foot"><span class="ok">${L(`✓ 可以先做：${free.length} 项`, `✓ ready to start: ${free.length}`)}</span>${dl}
+      <span class="faint">${L("待办", "to do")} ${by("todo").length} · ${L("进行", "doing")} ${by("doing").length}${pausedT.length ? ` · ${L("暂停", "paused")} ${pausedT.length}` : ""} · ${L("完成", "done")} ${done}</span></div></section>`;
+
+  // 卡在谁
+  const kinds = Object.keys(WAIT).filter(k => openW.some(w => w.waiting_on === k));
+  if (state.filter !== "all" && !kinds.includes(state.filter)) state.filter = "all";
+  // What unblocks the most comes first; then overdue chases; then oldest.
+  const lateOther = w => w.waiting_on !== "me" && daysSince(w.since) >= 3;
+  const shown = openW.filter(w => state.filter === "all" || w.waiting_on === state.filter)
+    .sort((a, b) => (b.blocks?.length || 0) - (a.blocks?.length || 0) || lateOther(b) - lateOther(a) || a.since.localeCompare(b.since));
+  const WAIT_LIMIT = 6;
+  const visible = state.waitAll ? shown : shown.slice(0, WAIT_LIMIT);
+  const witem = w => {
+    const d = daysSince(w.since), me = w.waiting_on === "me", late = !me && d >= 3;
+    // Red only when someone else is overdue and needs chasing; your own items just show their age.
+    const col = late ? "var(--red)" : d >= 3 ? "var(--amber)" : "var(--ink3)";
+    const action = me ? (w.kind === "do"
+        ? `<button class="act" data-resolve="${esc(w.id)}" data-mode="do">${L("我做完了", "I'm done")}</button>`
+        : `<button class="act" data-resolve="${esc(w.id)}" data-mode="decide">${L("记下决定", "Record decision")}</button>`)
+      : `${w.message_draft ? `<button class="act" data-copy="${esc(w.message_draft)}">${L("复制催办话术", "Copy nudge")}</button>` : ""}
+         <button class="act" data-resolve="${esc(w.id)}" data-mode="reply">${L("对方已回复", "They replied")}</button>`;
+    const blk = w.blocks?.length ? w.blocks.map(t => taskTitle(t)).join(L("、", ", ")) : "";
+    return `<div class="witem ${late ? "late" : ""}" data-wid="${esc(w.id)}" title="${esc(w.question)}">
+      <div class="q">${esc(w.question)}</div>
+      <div class="meta"><span class="wid">${esc(w.id)}</span><span class="pill ${me ? "lab-me" : late ? "lab-late" : "lab-other"}">${waitLabel(w)}${w.who ? " · " + esc(w.who) : ""}</span>
+        <span style="color:${col}">${late ? L("该催了 · ", "nudge · ") : ""}${L(`${d} 天`, `${d}d`)}</span>
+        ${w.check ? `<span class="faint" title="${L("完成后会自动核实：", "Verified automatically when done: ")}${esc(w.check)}">${L("✓ 可核实", "✓ verifiable")}</span>` : ""}
+        ${blk ? `<span class="blk" title="${L("阻塞了：", "Blocks: ")}${esc(blk)}">→ ${esc(blk)}</span>` : `<span class="free">${L("不阻塞任务", "blocks nothing")}</span>`}
+        <span class="acts">${action}</span></div></div>`;
+  };
+  const blocking = openW.filter(w => w.blocks?.length).length;
+  const resolvedW = S.waiting.filter(w => w.status === "resolved").sort((a, b) => (b.resolved_at || "").localeCompare(a.resolved_at || ""));
+  const oldest = openW.length ? Math.max(...openW.map(w => daysSince(w.since))) : 0;
+  const mine = openW.filter(w => w.waiting_on === "me").length;
+  const wait = !openW.length ? `<section class="card wait a-wait slim" data-pane="overview">
+    <div class="ctitle" style="margin:0"><h2>⏳ ${L("卡在谁", "Who's blocking")}</h2><span class="ok" style="font-size:12px">${L("没有等待项，畅通 ✓", "Nothing waiting, all clear ✓")}</span></div>
+    ${resolvedW.length ? `<details data-k="resolved" style="margin-top:4px"><summary>${L(`已解决 ${resolvedW.length} 项`, `Resolved ${resolvedW.length}`)}</summary>${resolvedW.map(w => `<div class="row">
+      <span class="wid faint">${esc(w.id)}</span><span class="txt" title="${esc(w.question + " → " + (w.answer || ""))}"><span style="color:var(--ink2)">${esc(w.question)}</span>
+      <span class="faint">→</span> ${esc(w.answer || "")}</span>${refLink(w.ref)}<span class="faint" style="flex:none">${(w.resolved_at || "").slice(5)}</span></div>`).join("")}</details>` : ""}</section>`
+  : `<section class="card wait a-wait" data-pane="overview">
+    <div class="ctitle"><h2>⏳ ${L("卡在谁", "Who's blocking")}</h2>${openW.length ? `<span class="pill lab-other">${L(`${openW.length} 项`, openW.length)}</span>` : ""}</div>
+    ${openW.length ? `<div class="summary">${mine ? L(`${mine} 项在等你`, `${mine} on you`) : ""}${mine && mine < openW.length ? " · " : ""}${openW.length - mine ? L(`${openW.length - mine} 项在等别人`, `${openW.length - mine} on others`) : ""} · ${L(`${blocking} 项卡着任务 · 最久 ${oldest} 天`, `${blocking} blocking tasks · oldest ${oldest}d`)}</div>` : ""}
+    ${kinds.length > 1 ? `<div class="filters"><button data-filter="all" class="${state.filter === "all" ? "on" : ""}">${L("全部", "All")} ${openW.length}</button>${kinds.map(k =>
+      `<button data-filter="${k}" class="${state.filter === k ? "on" : ""}">${k === "me" ? L("等你处理", "On you") : WAIT[k]} ${openW.filter(w => w.waiting_on === k).length}</button>`).join("")}</div>` : ""}
+    ${shown.length ? `<div class="wlist">${visible.map(witem).join("")}</div>` : `<div class="empty">${L("没有等待项，畅通 ✓", "Nothing waiting, all clear ✓")}</div>`}
+    ${shown.length > WAIT_LIMIT ? `<button class="more" id="waitall">${state.waitAll ? L("收起", "Show less") : L(`展开其余 ${shown.length - WAIT_LIMIT} 项`, `Show ${shown.length - WAIT_LIMIT} more`)}</button>` : ""}
+    ${resolvedW.length ? `<details data-k="resolved"><summary>${L(`已解决 ${resolvedW.length} 项`, `Resolved ${resolvedW.length}`)}</summary>${resolvedW.map(w => `<div class="row">
+      <span class="wid faint">${esc(w.id)}</span><span class="txt" title="${esc(w.question + " → " + (w.answer || ""))}"><span style="color:var(--ink2)">${esc(w.question)}</span>
+      <span class="faint">→</span> ${esc(w.answer || "")}</span>${refLink(w.ref)}<span class="faint" style="flex:none">${(w.resolved_at || "").slice(5)}</span></div>`).join("")}</details>` : ""}</section>`;
+
+  // 下一步
+  const nx = S.next;
+  const doing = by("doing").filter(t => !nx || t.id !== nx.task);
+  const next = `<section class="card next a-next" data-pane="overview">
+    <div class="ctitle"><h2>➜ ${L("下一步", "Next")}</h2></div>
+    ${nx ? `<div class="box upnext"><div class="label">${L("下一步", "Next up")}${nx.task ? ` · <span class="mono">${esc(nx.task)}</span>` : ""}</div>
+      <div class="t">${esc(nx.title)}</div>${nx.why ? `<div class="why">${esc(nx.why)}</div>` : ""}</div>` : `<div class="empty">${L("还没有设置下一步", "No next step yet")}</div>`}
+    ${doing.map(t => `<div class="box doing"><div class="label">● ${L("正在做", "Doing")} · <span class="mono">${esc(t.id)}</span></div><div class="t">${esc(t.title)}</div></div>`).join("")}
+    </section>`;
+
+  // 推进节奏
+  const max = Math.max(1, ...P.activity.map(a => a.count));
+  const lvl = n => n === 0 ? 0 : Math.min(4, Math.ceil(n / max * 4));
+  // Up to 21 days, starting from the project's first day if it is younger: no empty "before it existed" cells.
+  const days = P.since ? P.activity.filter(a => a.date >= P.since) : P.activity;
+  const young = days.length < P.activity.length;
+  const life = P.lifetime;
+  const heat = `<div class="heatwrap"><div class="heat" style="grid-template-columns:repeat(${days.length}, minmax(0, var(--cell)))">${days.map((a, i) =>
+      `<i class="${i === days.length - 1 ? "today" : ""}" style="background:var(--heat${lvl(a.count)})"
+        title="${L(`${a.date}：${a.commits} 次提交 · ${a.events} 条状态变更`, `${a.date}: ${a.commits} commits · ${a.events} status changes`)}"></i>`).join("")}</div>
+      <div class="heatlab"><span>${young ? L(`开始于 ${P.since.slice(5)}`, `started ${P.since.slice(5)}`) : L(`${P.activity.length} 天前`, `${P.activity.length} days ago`)}</span>${days.length >= 8 ? `<span>${L("今天", "today")}</span>` : ""}</div>
+      ${life ? `<div class="life">${L(`项目第 ${life.age} 天 · 累计活跃 ${life.active} 天`, `Day ${life.age} · active on ${life.active} days`)}</div>` : ""}</div>`;
+  const H = P.history;
+  // Burn-up: cumulative done (solid) vs all tasks so far (dashed); the shaded gap is what's left.
+  let burn = `<div class="faint" style="font-size:11px">${L("进度曲线：数据积累中（每天记录一次）", "Burn-up: collecting data (one snapshot a day)")}</div>`;
+  if (H.length >= 2) {
+    const W = 240, Ht = 44, p = 3, mt = Math.max(...H.map(h => h.total), 1), last = H[H.length - 1];
+    const x = i => p + i * (W - 2 * p) / (H.length - 1), y = v => Ht - p - v / mt * (Ht - 2 * p);
+    const pts = k => H.map((h, i) => `${x(i).toFixed(1)},${y(h[k]).toFixed(1)}`);
+    const line = k => "M" + pts(k).join("L");
+    const gap = "M" + pts("total").join("L") + "L" + pts("done").reverse().join("L") + "Z";
+    const hover = H.map((h, i) => {  // invisible columns, one per day, for the tooltip
+      const x0 = i ? (x(i - 1) + x(i)) / 2 : 0, x1 = i < H.length - 1 ? (x(i) + x(i + 1)) / 2 : W;
+      return `<rect x="${x0}" y="0" width="${x1 - x0}" height="${Ht}" fill="transparent"><title>${L(`${h.date.slice(5)}：完成 ${h.done} / 共 ${h.total}，还剩 ${h.total - h.done}`, `${h.date.slice(5)}: ${h.done} of ${h.total} done, ${h.total - h.done} left`)}</title></rect>`;
+    }).join("");
+    burn = `<svg class="burn" viewBox="0 0 ${W} ${Ht}" preserveAspectRatio="none">
+      <path d="${line("done")}L${x(H.length - 1)},${Ht - p}L${x(0)},${Ht - p}Z" fill="var(--green)" opacity=".12"/>
+      <path d="${gap}" fill="var(--amber)" opacity=".10"/>
+      <path d="${line("total")}" fill="none" stroke="var(--ink3)" stroke-dasharray="4 3" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
+      <path d="${line("done")}" fill="none" stroke="var(--green)" stroke-width="2" vector-effect="non-scaling-stroke"/>${hover}</svg>
+      <div class="heatlab"><span>${H[0].date.slice(5)}</span>
+        <span class="legend"><span><i class="sw"></i>${L("已完成", "done")} ${last.done}</span><span><i class="sw dash"></i>${L("总任务", "total")} ${last.total}</span></span>
+        <span>${last.date.slice(5)}</span></div>`;
+  }
+  const cad = `<section class="card a-cad" data-pane="overview"><div class="cad">
+    <div class="metric"><b class="g">${L(`${P.streak} 天`, `${P.streak}d`)}</b><span>${L("连续推进", "streak")}</span></div>
+    <div class="metric"><b>${L(`${P.today_done} 项`, P.today_done)}</b><span>${L("今天完成", "done today")}</span></div>
+    ${heat}<div class="burnwrap">${burn}</div></div></section>`;
+
+  // 任务
+  // A blocker is shown by what it is, not by its id; clicking jumps to it.
+  const blockerLink = id => {
+    const w = S.waiting.find(x => x.id === id), bug = S.bugs.find(x => x.id === id);
+    const label = w ? waitLabel(w) : "Bug", text = w ? w.question : bug ? bug.title : id;
+    return `<button class="blink" data-goto="${esc(id)}" title="${esc(id + " · " + label + L("：", ": ") + text)}">⛔ <span class="wid">${esc(id)}</span> <span class="who">${esc(label)} ·</span> ${esc(text)}</button>`;
+  };
+  const task = t => {
+    const b = blocked[t.id] && t.status !== "done";
+    const btn = !API ? "" : t.status === "todo" ? `<button class="mini" data-task="${esc(t.id)}" data-to="doing">${L("开始", "Start")}</button>`
+      : t.status === "doing" ? `<span class="acts"><button class="mini" data-pause="${esc(t.id)}">${L("暂停", "Pause")}</button><button class="mini" data-task="${esc(t.id)}" data-to="done">${L("完成", "Done")}</button></span>`
+      : t.status === "paused" ? `<button class="mini" data-resume="${esc(t.id)}">${L("继续", "Resume")}</button>` : "";
+    const ids = b ? blocked[t.id] : [];
+    const tag = ids.length ? `<div class="tag">${ids.slice(0, 2).map(blockerLink).join("")}${ids.length > 2
+      ? `<button class="blink" data-goto="${esc(ids[2])}">${L(`⛔ 还有 ${ids.length - 2} 项`, `⛔ +${ids.length - 2} more`)}</button>` : ""}</div>` : "";
+    return `<div class="task ${t.status} ${b ? "blocked" : ""}"><span class="id">${esc(t.id)}</span>
+      <div style="flex:1;min-width:0"><div>${t.urgent ? "⚡ " : ""}${esc(t.title)}</div>${t.status === "paused" && t.note ? `<div class="pnote" style="margin:2px 0 0">↳ ${esc(t.note)}</div>` : ""}${tag}</div>${btn}</div>`;
+  };
+  const todo = by("todo").sort((a, b) => !!blocked[a.id] - !!blocked[b.id]);
+  const board = `<section class="card a-board" data-pane="board">
+    <div class="ctitle"><h2>▦ ${L("任务", "Tasks")}</h2><span class="faint">${L("待办", "to do")} ${todo.length} · ${L("进行", "doing")} ${by("doing").length}${by("paused").length ? ` · ${L("暂停", "paused")} ${by("paused").length}` : ""} · ${L("完成", "done")} ${done}</span></div>
+    ${by("doing").length ? `<div class="grp" style="margin-top:0"><span class="dot" style="--c:var(--green)"></span>${L("进行中", "In progress")} ${by("doing").length}</div><div class="tgrid">${by("doing").map(task).join("")}</div>` : ""}
+    ${by("paused").length ? `<div class="grp">⏸ ${L("暂停中", "Paused")} ${by("paused").length}</div><div class="tgrid">${by("paused").map(task).join("")}</div>` : ""}
+    <div class="grp"><span class="dot" style="--c:var(--amber)"></span>${L("待办", "To do")} ${todo.length}</div>
+    ${todo.length ? `<div class="tgrid">${todo.map(task).join("")}</div>` : `<div class="empty">${L("没有待办", "Nothing to do")}</div>`}
+    ${done ? `<details data-k="done"><summary>${L(`已完成 ${done} 项`, `Done ${done}`)}</summary><div class="tgrid">${by("done").map(task).join("")}</div></details>` : ""}</section>`;
+
+  // Bug
+  const sevC = { critical: "var(--red)", high: "var(--red)", medium: "var(--amber)", low: "var(--ink3)" };
+  const openB = S.bugs.filter(b => b.status === "open" || b.status === "fixing");
+  const closedB = S.bugs.filter(b => b.status === "fixed" || b.status === "wontfix")
+    .sort((a, b) => (b.closed_at || "").localeCompare(a.closed_at || "") || b.id.localeCompare(a.id, undefined, { numeric: true }));
+  const bugs = `<section class="card a-bugs" data-pane="board">
+    <div class="ctitle"><h2>🐞 ${L("Bug", "Bugs")}</h2><span class="pill ${openB.length ? "lab-late" : "lab-other"}">${L(`${openB.length} 未修 · ${S.bugs.length - openB.length} 已关闭`, `${openB.length} open · ${S.bugs.length - openB.length} closed`)}</span></div>
+    ${openB.length ? openB.map(b => `<div class="row" data-bid="${esc(b.id)}"><span class="wid faint">${esc(b.id)}</span><span class="sev" style="color:${sevC[b.severity]}">${esc(b.severity)}</span>
+      <span class="txt">${esc(b.title)}</span>${b.status === "fixing" ? `<span class="faint">${L("修复中", "fixing")}</span>` : ""}${API ? `<button class="mini" data-bug="${esc(b.id)}">${L("已修复", "Fixed")}</button>` : ""}</div>`).join("") : `<div class="empty">${L("没有未修 bug ✓", "No open bugs ✓")}</div>`}
+    ${closedB.length ? `<details data-k="closed"><summary>${L(`已关闭 ${closedB.length} 项`, `Closed ${closedB.length}`)}</summary>${closedB.map(b => `<div class="row" data-bid="${esc(b.id)}">
+      <span class="wid faint">${esc(b.id)}</span><span class="txt" style="color:var(--ink2)">${esc(b.title)}</span>
+      ${refLink(b.ref)}<span class="faint" style="flex:none">${b.status === "wontfix" ? L("不修", "won't fix") : L("已修复", "fixed")}${b.closed_at ? " · " + b.closed_at.slice(5) : ""}</span></div>`).join("")}</details>` : ""}</section>`;
+
+  // 动态
+  const fresh = S.timeline.filter(e => isNew(e.at)).length;
+  const FEED_LIMIT = Math.max(8, fresh);  // never hide what changed while you were away
+  const feed = `<section class="card a-feed" data-pane="feed">
+    <div class="ctitle"><h2>🕒 ${L("推进动态", "Activity")}</h2>${fresh ? `<span class="badge">${L(`你不在时 +${fresh}`, `+${fresh} while away`)}</span>` : ""}</div>
+    ${S.timeline.slice(0, state.feedAll ? 30 : FEED_LIMIT).map(e => `<div class="row ${isNew(e.at) ? "new" : ""}"><span class="when" data-ago="${e.at}">${ago(e.at)}</span>
+      <span class="k">${ICON[e.type] || "·"}</span><span class="txt" title="${esc(e.text)}">${esc(e.text)}</span>${isNew(e.at) ? `<span class="badge">${L("新", "new")}</span>` : ""}</div>`).join("")}
+    ${S.timeline.length > FEED_LIMIT ? `<button class="more" id="feedall">${state.feedAll ? L("收起", "Show less") : L(`展开更早的 ${S.timeline.length - FEED_LIMIT} 条`, `Show ${S.timeline.length - FEED_LIMIT} earlier`)}</button>` : ""}</section>`;
+
+  // 文档
+  const ROLE = EN ? { progress: "Progress log", todo: "To-do list", plan: "Plan", spec: "Spec", guide: "Guide", notes: "Notes",
+    agent: "Agent instructions", script: "Scripts", other: "Other" }
+  : { progress: "进度记录", todo: "待办清单", plan: "方案", spec: "需求", guide: "指南", notes: "过程记录",
+    agent: "给 agent 的说明", script: "脚本", other: "其他" };
+  const ICONS = { progress: "◔", todo: "☑", plan: "◇", spec: "◆", guide: "ⓘ", notes: "✎", agent: "⚙", script: "$", other: "·" };
+  const statusTime = new Date(S.updated_at).getTime() / 1000;
+  const allDocs = P.docs || [];
+  const allTags = [...new Set(allDocs.flatMap(d => d.tags || []))].sort();
+  const q = state.q.trim().toLowerCase();
+  const match = d => (state.showHidden || !d.hidden) && (!state.tag || (d.tags || []).includes(state.tag)) &&
+    (!q || [d.path, d.purpose, d.title, d.note, ...(d.tags || [])].join(" ").toLowerCase().includes(q));
+  const docRow = d => {
+    const name = d.path.split("/").pop(), dir = d.path.includes("/") ? d.path.slice(0, d.path.lastIndexOf("/") + 1) : "";
+    const updated = d.last_viewed && d.mtime > new Date(d.last_viewed).getTime() / 1000;
+    const sub = d.purpose || d.title || (d.role ? ROLE[d.role] : "");
+    return `<div class="doc" data-doc="${esc(d.path)}" title="${esc(d.path)}">
+      <span class="ic">${d.pinned ? "★" : ICONS[d.role] || (d.script ? "$" : "·")}</span>
+      <div class="main"><div class="nm"><span class="dir">${esc(dir)}</span>${esc(name)}</div>${sub ? `<div class="ds">${esc(sub)}</div>` : ""}</div>
+      <span class="side">${(d.tags || []).map(t => `<span class="dtag">${esc(t)}</span>`).join("")}
+        ${d.checks ? `<span class="minibar" title="${d.checks.done}/${d.checks.total} ${L("已勾选", "checked")}"><span style="width:${Math.round(d.checks.done * 100 / d.checks.total)}%"></span></span>${d.checks.done}/${d.checks.total}` : ""}
+        ${d.source ? (d.newer_than_status ? `<span class="upd" title="${L("这份进度来源在状态上次更新之后被改过", "Changed after the status was last updated")}">${L("比状态新", "newer than status")}</span>` : `<span class="syn">${L("已同步", "in sync")}</span>`) : ""}
+        ${updated ? `<span class="upd">${L("有更新", "updated")}</span>` : ""}
+        ${d.refs?.length ? `<span class="faint">${d.refs.map(esc).join(" ")}</span>` : ""}
+        <span>${ago(new Date(d.mtime * 1000).toISOString())}</span></span></div>`;
+  };
+  const shownDocs = allDocs.filter(match);
+  const sources = shownDocs.filter(d => d.source);
+  const rest = shownDocs.filter(d => !d.source);
+  const pinned = rest.filter(d => d.pinned);
+  const byRole = {};
+  rest.filter(d => !d.pinned).forEach(d => (byRole[d.role || "_"] ||= []).push(d));
+  const order = ["plan", "spec", "guide", "notes", "agent", "other", "_", "script"];
+  const groups = order.filter(r => byRole[r]).map(r => `<div><div class="dgrp">${r === "_" ? L("未分类", "Unsorted") : ROLE[r]} ${byRole[r].length}</div>
+    ${byRole[r].sort((a, b) => b.mtime - a.mtime).map(docRow).join("")}</div>`).join("");
+  const hiddenCount = allDocs.filter(d => d.hidden).length;
+  const docsCard = `<section class="card a-docs" data-pane="docs">
+    <div class="ctitle"><h2>📄 ${L("文档", "Docs")}</h2><span class="faint">${L(`${allDocs.length} 份 · 只读索引，不改动项目`, `${allDocs.length} files · read-only index, project untouched`)}</span></div>
+    <div class="dtools"><input id="dq" placeholder="${L("搜索文件名、作用、标签…", "Search names, purposes, tags…")}" value="${esc(state.q)}">
+      ${allTags.map(t => `<button class="chip ${state.tag === t ? "on" : ""}" data-tagf="${esc(t)}">${esc(t)}</button>`).join("")}
+      ${hiddenCount ? `<button class="chip ${state.showHidden ? "on" : ""}" id="showhidden">${L("已隐藏", "Hidden")} ${hiddenCount}</button>` : ""}</div>
+    ${sources.length ? `<div class="dgrp">${L("进度来源 · agent 的进度记录，面板上的状态由它们提炼", "Progress sources · the agent's progress notes the status is distilled from")}</div><div class="sources">${sources.map(docRow).join("")}</div>` : ""}
+    ${pinned.length ? `<div class="dgrp">★ ${L("置顶", "Pinned")}</div>${pinned.map(docRow).join("")}` : ""}
+    <div class="doccols">${groups}</div>
+    ${!shownDocs.length ? `<div class="empty">${allDocs.length ? L("没有匹配的文档", "No matching docs") : L("没有发现文档", "No docs found")}</div>` : ""}
+    ${(P.docs_missing || []).length ? `<div class="dgrp">${L("找不到的文件（之前加过标记）", "Missing files (previously annotated)")}</div>${P.docs_missing.map(d =>
+      `<div class="doc"><span class="ic">?</span><div class="main"><div class="nm">${esc(d.path)}</div><div class="ds">${esc(d.note || (d.tags || []).join(L("、", ", ")))}</div></div>
+       ${API ? `<button class="mini" data-forget="${esc(d.path)}">${L("清除", "Clear")}</button>` : ""}</div>`).join("")}` : ""}
+    ${!API ? `<div class="faint" style="font-size:11px;margin-top:8px">${L(`预览、标签、备注需通过 <span class="mono">forthmark.py open</span> 打开面板`, `Preview, tags and notes need the panel opened with <span class="mono">forthmark.py open</span>`)}</div>` : ""}</section>`;
+
+  const footer = `<div class="footer"><span>${L("状态更新于", "Status updated")} <span data-ago="${S.updated_at}">${ago(S.updated_at)}</span> · ${L("面板生成于", "panel built at")} ${DATA.generated_at.slice(11, 16)} · ${API ? `<span style="color:var(--green)">${L("● 已连接，可直接在面板上操作", "● Connected: act right from the panel")}</span>` : L("静态页 · 运行 <span class=\"mono\">forthmark.py open</span> 可在面板上直接操作", "Static page · run <span class=\"mono\">forthmark.py open</span> to act from the panel")}</span>
+    <span class="mono">${esc(P.path.replace(/^\/Users\/[^/]+/, "~"))}</span></div>`;
+
+  patch(app, `<div class="topbar">${head}${tabs}</div><div class="scroller">` + `<div class="panes ${openW.length > 3 ? "manywait" : ""}">${where}${wait}${next}${cad}<div class="mainL">${board}${state.bugsLeft ? bugs : ""}</div><div class="side">${feed}${state.bugsLeft ? "" : bugs}</div>${docsCard}</div>` + footer + `</div>`);
+  saveState();
+  fitPopover();
+  balanceColumns();
+  if (!seen) store.set("forthmark-seen:" + P.id, new Date().toISOString());
+}
+
+// Update only what changed: keeps open <details>, the focused search box and scroll position.
+function patch(el, html) {
+  if (!window.morphdom || !el.firstChild) { el.innerHTML = html; return; }
+  morphdom(el, `<div>${html}</div>`, {
+    childrenOnly: true,
+    onBeforeElUpdated(from, to) {
+      if (from.tagName === "DETAILS") to.open = from.open;
+      if (from === document.activeElement && from.tagName === "INPUT") return false;
+      return !from.isEqualNode(to);
+    },
+  });
+}
+
+// Wide layout: put the Bug card under whichever column ends higher, so the two columns end evenly.
+function balanceColumns() {
+  if (innerWidth < 900) return;
+  const L = document.querySelector(".mainL"), R = document.querySelector(".side"), B = document.querySelector(".a-bugs");
+  if (!L || !R || !B) return;
+  const gap = 16, b = B.offsetHeight + gap, inLeft = B.parentElement === L;
+  const left = L.offsetHeight - (inLeft ? b : 0), right = R.offsetHeight - (inLeft ? 0 : b);
+  const wantLeft = Math.max(left + b, right) < Math.max(left, right + b);
+  if (wantLeft !== !!state.bugsLeft) { state.bugsLeft = wantLeft; render(); }
+}
+addEventListener("resize", () => balanceColumns());
+
+// In the app's popover: tell it how tall the content is, so it can size itself (no scroll for little content).
+let fitTimer;
+function fitPopover() {
+  if (!NATIVE || SHELL !== "popover" || document.querySelector(".modal")) return;  // resizing mid-typing breaks the IME
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(() => {
+    const app = $("app"), top = app.querySelector(".topbar"), sc = app.querySelector(".scroller");
+    if (!top || !sc) return;
+    const cs = getComputedStyle(app);
+    // Measure the content itself: sc.scrollHeight never drops below the scroller's own height, so the
+    // popover could grow but never shrink back (e.g. switching from a big project to a small one).
+    const scs = getComputedStyle(sc);
+    const content = [...sc.children].filter(c => c.offsetParent !== null)
+      .reduce((sum, c, i) => sum + c.offsetHeight + (i ? parseFloat(scs.rowGap || 0) : 0), 0);
+    const h = parseFloat(cs.paddingTop) + top.offsetHeight + parseFloat(cs.rowGap || cs.gap || 0)
+      + parseFloat(scs.paddingTop) + content + parseFloat(scs.paddingBottom) + 2;
+    NATIVE.postMessage({ action: "resize", height: Math.ceil(h) });
+  }, 30);
+}
+document.addEventListener("toggle", fitPopover, true);  // <details> opened/closed
+
+function newProjectDialog() {
+  const base = (DATA.config?.projects_dir || "~/Documents").replace(/\/$/, "");
+  const m = document.createElement("div");
+  m.className = "modal";
+  m.innerHTML = `<form>
+    <h3>${L("新建项目", "New project")}</h3>
+    <label>${L("名字", "Name")}<input type="text" name="name" placeholder="${L("比如：健身打卡小工具", "e.g. habit-tracker")}" autofocus required></label>
+    <label>${L("位置", "Location")}<input type="text" name="dir" value="${esc(base)}/"></label>
+    <label>${L("想法（作为第一句话交给 agent）", "Idea (given to the agent as its first message)")}<textarea name="idea" placeholder="${L("想做什么、先做到什么程度，越具体越好", "What you want to build and how far to take it first. The more specific, the better")}"></textarea></label>
+    <div class="hint">${L(`会创建文件夹${DATA.config?.git_init ? "并 git init" : ""}、接入跟踪，然后在 ${esc(DATA.config?.terminal || "终端")} 里启动 ${esc(DATA.config?.agent || "claude")}。`, `Creates the folder${DATA.config?.git_init ? " (git init)" : ""}, tracks it, then starts ${esc(DATA.config?.agent || "claude")} in ${esc(DATA.config?.terminal || "a terminal")}.`)}</div>
+    <div class="row2"><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("创建并开始", "Create and start")}</button></div>
+  </form>`;
+  document.body.appendChild(m);
+  const f = m.querySelector("form"), name = f.elements.name, dir = f.elements.dir;
+  let dirTouched = false;
+  dir.addEventListener("input", () => dirTouched = true);
+  name.addEventListener("input", () => { if (!dirTouched) dir.value = `${base}/${name.value.trim()}`; });
+  const close = () => m.remove();
+  m.addEventListener("click", e => { if (e.target === m || e.target.closest("[data-close]")) close(); });
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    const args = { name: name.value.trim(), dir: dir.value.trim(), idea: f.elements.idea.value.trim() };
+    const res = await (await fetch("/api/op", { method: "POST", headers: { "Content-Type": "application/json", "X-Forthmark-Token": API.token },
+      body: JSON.stringify({ op: "create_project", args }) })).json();
+    if (!res.ok) return toast(L("没有成功：", "Didn't work: ") + res.error);
+    close(); toast(res.text); state.project = res.project; await refresh(); render();
+  });
+  setTimeout(() => name.focus(), 30);
+  // In the popover make room for the form; give the size back when it closes.
+  if (NATIVE && SHELL === "popover") NATIVE.postMessage({ action: "resize", height: Math.max(560, document.body.scrollHeight) });
+  new MutationObserver((_, obs) => { if (!m.isConnected) { obs.disconnect(); fitPopover(); } }).observe(document.body, { childList: true });
+}
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+function copy(text, msg) {
+  const fallback = () => {
+    const t = document.createElement("textarea");
+    t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); toast(msg);
+  };
+  navigator.clipboard ? navigator.clipboard.writeText(text).then(() => toast(msg), fallback) : fallback();
+}
+
+// ---- document preview (live mode only); libraries load on first use
+let libs = null;
+function loadLibs() {
+  if (libs) return libs;
+  const css = document.createElement("link");
+  css.rel = "stylesheet"; css.href = "/vendor/github-markdown.css";
+  document.head.appendChild(css);
+  const js = src => new Promise((ok, fail) => { const t = document.createElement("script"); t.src = src; t.onload = ok; t.onerror = fail; document.head.appendChild(t); });
+  return libs = Promise.all([js("/vendor/marked.min.js"), js("/vendor/purify.min.js")]);
+}
+const curProject = () => DATA.projects.find(p => p.id === state.project);
+const curDoc = () => (curProject().docs || []).find(d => d.path === state.doc);
+function drawerHead(d) {
+  return `<div class="row1"><h3 title="${esc(d.path)}">${esc(d.path)}</h3><button class="iconbtn" id="dclose" title="${L("关闭", "Close")}">✕</button></div>
+    ${d.purpose ? `<div class="muted" style="font-size:12px">${esc(d.purpose)}</div>` : ""}
+    ${d.note ? `<div class="note">📝 ${esc(d.note)}</div>` : ""}
+    <div class="btns"><button class="act" data-dop="pin">${d.pinned ? L("取消置顶", "Unpin") : L("★ 置顶", "★ Pin")}</button>
+      <button class="act" data-dop="tags">${L("标签", "Tags")}${d.tags?.length ? L("：", ": ") + esc(d.tags.join(L("、", ", "))) : ""}</button>
+      <button class="act" data-dop="note">${L("备注", "Note")}</button>
+      <button class="act" data-dop="hide">${d.hidden ? L("取消隐藏", "Unhide") : L("隐藏", "Hide")}</button>
+      <button class="act primary" data-dop="open">${L("用默认程序打开", "Open in default app")}</button></div>`;
+}
+async function openDoc(path) {
+  if (!API) return toast(L("预览需通过 forthmark.py open 打开面板", "Preview needs the panel opened with forthmark.py open"));
+  if (NATIVE && !DOC_VIEW && window.innerWidth < 900) {  // narrow popover: a document deserves its own window
+    return NATIVE.postMessage({ action: "openDoc", project: state.project, path });
+  }
+  state.doc = path;
+  saveState();
+  const d = curDoc(), dr = $("drawer");
+  if (!d) {
+    if (DOC_VIEW) {  // a document window must never be blank
+      dr.innerHTML = `<div class="dh"><div class="row1"><h3>${esc(path)}</h3></div></div>
+        <div class="db"><div class="empty">${L("在这个项目里找不到这份文档，它可能已经改名或删除。", "This document isn't in the project any more; it may have been renamed or deleted.")}</div></div>`;
+      dr.classList.add("open");
+    }
+    state.doc = null;
+    return;
+  }
+  dr.innerHTML = `<div class="dh">${drawerHead(d)}</div><div class="db"><div class="faint">${L("加载中…", "Loading…")}</div></div>`;
+  dr.classList.add("open");
+  try {
+    const [r] = await Promise.all([fetch(`/api/doc?project=${encodeURIComponent(state.project)}&path=${encodeURIComponent(path)}`,
+      { headers: { "X-Forthmark-Token": API.token } }), loadLibs()]);
+    const res = await r.json();
+    const body = dr.querySelector(".db");
+    if (res.error) { body.innerHTML = `<div class="empty">${esc(res.error)}</div>`; return; }
+    body.innerHTML = /\.(md|markdown|mdx)$/i.test(path)
+      ? `<article class="markdown-body">${DOMPurify.sanitize(marked.parse(res.text))}</article>`
+      : `<pre class="raw">${esc(res.text)}</pre>`;
+    body.querySelectorAll("a[href]").forEach(a => {
+      const href = a.getAttribute("href");
+      if (/^[a-z]+:/i.test(href) || href.startsWith("#")) { a.target = "_blank"; a.rel = "noopener"; return; }
+      a.dataset.link = href;  // relative link to another doc in the project
+    });
+    op("doc_viewed", { path }, true);
+  } catch (e) { dr.querySelector(".db").innerHTML = `<div class="empty">${L("读取失败", "Couldn't read the file")}</div>`; }
+}
+function refreshDrawer() {
+  const d = state.doc && curDoc();
+  if (d) $("drawer").querySelector(".dh").innerHTML = drawerHead(d);
+}
+// Re-rendering rebuilds the search box, which kills an IME composition (Chinese, Japanese…).
+// So wait until the composition is committed, and don't refresh while someone is typing.
+let composing = false;
+document.addEventListener("compositionstart", () => { composing = true; });  // any field: search, dialog, …
+document.addEventListener("compositionend", e => {
+  composing = false;
+  if (e.target.id === "dq") { state.q = e.target.value; render(); }
+});
+document.addEventListener("input", e => {
+  if (e.target.id !== "dq" || composing || e.isComposing) return;
+  state.q = e.target.value; render();
+});
+// Someone is typing (any field, mid-IME or not) or a dialog is open: don't re-render or resize under them.
+const typing = () => composing || /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "")
+  || !!document.querySelector(".modal");
+document.addEventListener("keydown", e => { if (e.key === "Escape") { $("drawer").classList.remove("open"); state.doc = null; } });
+
+document.addEventListener("click", e => {
+  const link = e.target.closest("a[data-link]");
+  if (link) {
+    e.preventDefault();
+    const base = state.doc.includes("/") ? state.doc.slice(0, state.doc.lastIndexOf("/") + 1) : "";
+    const parts = [];
+    (base + decodeURIComponent(link.dataset.link.split("#")[0])).split("/").forEach(p => p === ".." ? parts.pop() : p && p !== "." && parts.push(p));
+    const target = parts.join("/");
+    return (curProject().docs || []).some(d => d.path === target) ? openDoc(target) : toast(L("项目里找不到 ", "Not in this project: ") + target);
+  }
+  const row = e.target.closest("[data-doc]");
+  if (row && !e.target.closest("button")) return openDoc(row.dataset.doc);
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.id === "dclose") { $("drawer").classList.remove("open"); state.doc = null; saveState(); return; }
+  if (b.dataset.docref) return openDoc(b.dataset.docref);
+  if (b.dataset.goto) {
+    const id = b.dataset.goto, isWait = id.startsWith("w");
+    if (isWait) { state.tab = "overview"; state.filter = "all"; state.waitAll = true; }
+    else state.tab = "board";
+    render();
+    const el = document.querySelector(isWait ? `[data-wid="${CSS.escape(id)}"]` : `[data-bid="${CSS.escape(id)}"]`);
+    if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("flash"); }
+    return;
+  }
+  if (b.id === "feedall") { state.feedAll = !state.feedAll; return render(); }
+  if (b.id === "waitall") { state.waitAll = !state.waitAll; return render(); }
+  if (b.id === "showhidden") { state.showHidden = !state.showHidden; return render(); }
+  if (b.dataset.tagf !== undefined) { state.tag = state.tag === b.dataset.tagf ? "" : b.dataset.tagf; return render(); }
+  if (b.dataset.forget) return op("doc_forget", { path: b.dataset.forget });
+  if (b.dataset.dop) {
+    const d = curDoc(), path = d.path, kind = b.dataset.dop;
+    if (kind === "open") return op("doc_open", { path });
+    if (kind === "pin") return op("doc_meta", { path, pinned: !d.pinned });
+    if (kind === "hide") return op("doc_meta", { path, hidden: !d.hidden });
+    if (kind === "tags") { const v = prompt(L("标签（用逗号分隔，留空清除）", "Tags (comma-separated, empty to clear)"), (d.tags || []).join(", ")); if (v !== null) op("doc_meta", { path, tags: v }); return; }
+    if (kind === "note") { const v = prompt(L("备注（留空清除）", "Note (empty to clear)"), d.note || ""); if (v !== null) op("doc_meta", { path, note: v }); return; }
+  }
+  if (b.id === "theme") return toggleTheme();
+  if (b.id === "newproj") return newProjectDialog();
+  if (b.dataset.session) return op("open_session", { mode: b.dataset.session });
+  if (b.id === "expand") return NATIVE?.postMessage({ action: "openPanel" });
+  if (b.dataset.project) { state.project = b.dataset.project; state.filter = "all"; return render(); }
+  if (b.dataset.tab) { state.tab = b.dataset.tab; return render(); }
+  if (b.dataset.filter) { state.filter = b.dataset.filter; return render(); }
+  if (b.dataset.copy) return copy(b.dataset.copy, L("已复制催办话术", "Nudge copied"));
+  if (b.dataset.resolve) {
+    const w = DATA.projects.find(p => p.id === state.project).status.waiting.find(x => x.id === b.dataset.resolve);
+    const mode = b.dataset.mode;
+    let answer = L("已完成", "Done");
+    if (mode === "do") { if (!confirm(L(`确认已完成？\n${w.question}`, `Mark as done?\n${w.question}`))) return; }
+    else {
+      answer = prompt(mode === "decide" ? L(`记下你的决定：\n${w.question}`, `Your decision:\n${w.question}`) : L(`对方怎么答复的？\n${w.question}`, `What did they say?\n${w.question}`));
+      if (!answer) return;
+    }
+    if (API) return op("resolve_waiting", { id: w.id, answer }, false, async err => {
+      if (/^(核实没通过|Check failed)/.test(err) && confirm(L(`${err}\n\n确定已经做完了，仍然标记为完成？`, `${err}\n\nSure it's done? Mark it done anyway?`)))
+        return op("resolve_waiting", { id: w.id, answer, force: "1" });
+      toast(L("没有成功：", "Didn't work: ") + err);
+    });
+    copy(L(`请把 Forthmark 等待项 ${w.id}（${w.question}）标为已解决，答复：${answer}`, `Please mark Forthmark waiting item ${w.id} (${w.question}) as resolved, answer: ${answer}`), L("已复制，粘贴给你的 agent 即可", "Copied: paste it to your agent"));
+  }
+  if (b.dataset.task) {
+    const P = curProject(), ids = b.dataset.to === "doing" ? (P.blocked[b.dataset.task] || []) : [];
+    if (ids.length) {
+      const what = ids.map(id => { const w = P.status.waiting.find(x => x.id === id), g = P.status.bugs.find(x => x.id === id);
+        return `· ${id} ${w ? w.question : g ? g.title : ""}`; }).join("\n");
+      if (!confirm(L(`这个任务还被下面这些卡着，现在开始可能做不下去：\n${what}\n\n仍然开始？`, `This task is still blocked by:\n${what}\n\nStart anyway?`))) return;
+    }
+    return op("set_task", { id: b.dataset.task, status: b.dataset.to });
+  }
+  if (b.dataset.pause) {
+    const t = curProject().status.tasks.find(x => x.id === b.dataset.pause);
+    const note = prompt(L(`暂停「${t.title}」\n做到哪了、回来从哪继续？\n可以留空：你下次在会话里发消息时，agent 会根据上下文补写。`, `Pause "${t.title}"\nWhere did it stop, and where to pick up?\nCan be empty: the agent fills it in the next time you message the session.`), t.note || "");
+    if (note !== null) return op("pause_task", { id: t.id, note });
+    return;
+  }
+  if (b.dataset.resume) {
+    if (API) return op("resume_task", { id: b.dataset.resume });
+    const t = curProject().status.tasks.find(x => x.id === b.dataset.resume);
+    return copy(L(`继续做 ${t.id}（${t.title}）${t.note ? "，上次停在：" + t.note : ""}`, `Resume ${t.id} (${t.title})${t.note ? ", last stopped at: " + t.note : ""}`), L("已复制，粘贴给你的 agent 即可", "Copied: paste it to your agent"));
+  }
+  if (b.dataset.bug) return op("set_bug", { id: b.dataset.bug, status: "fixed" });
+});
+
+async function op(name, args, quiet, onError) {
+  try {
+    const r = await fetch("/api/op", { method: "POST", headers: { "Content-Type": "application/json", "X-Forthmark-Token": API.token },
+      body: JSON.stringify({ project: state.project, op: name, args }) });
+    if (r.status === 403) { toast(L("服务刚刚更新，正在重新连接…", "The service was just updated, reconnecting…")); return setTimeout(() => location.reload(), 600); }
+    const res = await r.json();
+    if (!res.ok) return onError ? onError(res.error) : toast(L("没有成功：", "Didn't work: ") + res.error);
+    if (!quiet) toast(L("已记录 ✓ ", "Saved ✓ ") + res.text);
+    await refresh();
+  } catch (e) { toast(L("连不上本地服务，请重新运行 forthmark.py open", "Can't reach the local service: run forthmark.py open again")); }
+}
+let pendingRender = false;
+async function refresh() {
+  try {
+    const r = await fetch("/api/state", { headers: { "X-Forthmark-Token": API.token } });
+    if (r.status === 403) return location.reload();  // the service restarted with a new token
+    if (!r.ok) return;
+    const next = await r.json();
+    const sig = d => JSON.stringify(d.projects);
+    if (sig(next) !== sig(DATA)) { DATA = next; pendingRender = true; }
+    if (pendingRender && !typing()) { pendingRender = false; render(); refreshDrawer(); }  // deferred while typing
+  } catch (e) {}
+}
+
+render();
+if (hash.get("newproj") === "1" && API) setTimeout(newProjectDialog, 50);  // opened from the popover's "＋"
+// The page scrolls (wide) or .scroller does (narrow); scroll events don't bubble, so listen in capture.
+document.addEventListener("scroll", e => {
+  const y = e.target === document ? scrollY : e.target.scrollTop || 0;
+  document.documentElement.classList.toggle("scrolled", y > 24);
+}, { capture: true, passive: true });
+if (state.doc && API) openDoc(state.doc);
+// "New since you last looked": only counts as seen after the page has been visible for a while,
+// so changes made while the tab sat in the background stay highlighted when you come back.
+setTimeout(() => {
+  if (document.visibilityState === "visible" && state.project) store.set("forthmark-seen:" + state.project, new Date().toISOString());
+}, 8000);
+setInterval(() => document.querySelectorAll("[data-ago]").forEach(el => el.textContent = ago(el.dataset.ago)), 30000);
+// Live: poll the local service. Static: reload the regenerated file.
+if (API) setInterval(() => { if (!document.hidden) refresh(); }, 5000);
+else {
+  try {
+    const keep = JSON.parse(sessionStorage.getItem("forthmark-keep") || "null");
+    if (keep) {
+      keep.open.forEach(k => { const d = document.querySelector(`details[data-k="${k}"]`); if (d) d.open = true; });
+      const sc = document.querySelector(".scroller");
+      if (sc && getComputedStyle(sc).overflowY === "auto") sc.scrollTop = keep.y; else window.scrollTo(0, keep.y);
+      sessionStorage.removeItem("forthmark-keep");
+    }
+  } catch (e) {}
+  setInterval(() => {
+    if (typing()) return;
+    try {
+      const sc = document.querySelector(".scroller");
+      sessionStorage.setItem("forthmark-keep", JSON.stringify({ y: (sc && sc.scrollTop) || window.scrollY,
+        open: [...document.querySelectorAll("details[open][data-k]")].map(d => d.dataset.k) }));
+    } catch (e) {}
+    location.reload();
+  }, 15000);
+}
+</script>
+</body>
+</html>
