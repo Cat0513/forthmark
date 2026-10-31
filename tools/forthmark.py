@@ -8,7 +8,7 @@ Usage:
   forthmark.py add [DIR]         start tracking a project (its git root; --here for DIR itself); nothing is written
   forthmark.py remove [DIR]      stop tracking a project (status data is kept)
   forthmark.py move OLD NEW      the project folder was moved/renamed: keep its status under the new path
-  forthmark.py new NAME [--dir=PATH] [--idea="…"]   new folder, tracked, agent started in your terminal
+  forthmark.py new NAME [--dir=PATH] [--goal="…"]   new folder, tracked, your agent opened in a terminal (you type first)
   forthmark.py session [DIR]     ＋ a new agent session in your terminal (it gets the project's status)
   forthmark.py continue [DIR]    ▶ the agent's most recent session in that folder
   forthmark.py sessions [DIR]    ☰ the agent's own session picker in that folder
@@ -1039,9 +1039,9 @@ def clean_env():
 CONFIG_PATH = HOME / "config.json"
 DEFAULT_CONFIG = {
     "terminal": "auto",               # auto (Ghostty if installed, else Terminal) | ghostty | terminal
-    # Three ways in, all the agent's own: we only type the command (Codex: "codex {prompt}",
+    # Three ways in, all the agent's own: we only type the command (Codex: "codex",
     # "codex resume --last", "codex resume").
-    "agent": "claude {prompt}",       # ＋ new session; {prompt} is the user's own words, if any
+    "agent": "claude",                # ＋ new session; it starts empty: the first message is always the user's
     "resume_last": "claude --continue",  # ▶ the most recent session in that folder (the agent decides which)
     "resume_pick": "claude --resume",    # ☰ the agent's own session picker
     "projects_dir": "~/Documents",    # where new projects go
@@ -1135,9 +1135,9 @@ def load_config():
     return cfg
 
 
-def launch_agent(path, prompt=None, command=None):
-    """Open a new terminal window in `path` running the user's agent. `prompt` is only ever the user's own
-    words (never instructions from us); `command` replaces the agent template (e.g. to resume a session)."""
+def launch_agent(path, command=None):
+    """Open a new terminal window in `path` running the user's agent, with nothing typed for them:
+    the first message is always the user's. `command` replaces the agent command (e.g. to resume)."""
     cfg = load_config()
     if cfg["terminal"] not in TERMINALS:
         raise OpError(L(f"不支持的终端 {cfg['terminal']}（可用：{', '.join(TERMINALS)}）", f"unsupported terminal {cfg['terminal']} (available: {', '.join(TERMINALS)})"))
@@ -1147,16 +1147,9 @@ def launch_agent(path, prompt=None, command=None):
         if time.time() - old.stat().st_mtime > 86400:
             old.unlink(missing_ok=True)
     stamp = f"{int(time.time() * 1000)}"
-    lines = ["#!/bin/zsh -l", f"unset {' '.join(SESSION_ENV)}", f"cd {shlex.quote(str(path))} || exit 1"]
-    if command:
-        lines.append(command)
-    elif prompt:
-        # The prompt travels in a file and is passed as one quoted argument: no shell injection from its text.
-        prompt_file = launch_dir / f"{stamp}.prompt"
-        prompt_file.write_text(prompt, encoding="utf-8")
-        lines += [f"PROMPT=$(cat {shlex.quote(str(prompt_file))})", cfg["agent"].replace("{prompt}", '"$PROMPT"')]
-    else:
-        lines.append(cfg["agent"].replace("{prompt}", "").strip())
+    # "{prompt}" is from configs written before the first message became the user's; it expands to nothing.
+    agent = cfg["agent"].replace("{prompt}", "").strip()
+    lines = ["#!/bin/zsh -l", f"unset {' '.join(SESSION_ENV)}", f"cd {shlex.quote(str(path))} || exit 1", command or agent]
     script = launch_dir / f"{stamp}.command"
     script.write_text("\n".join(lines + ["exec zsh -l", ""]), encoding="utf-8")
     script.chmod(0o700)
@@ -1169,8 +1162,10 @@ def launch_agent(path, prompt=None, command=None):
         raise OpError(L("打不开终端：", "couldn't open the terminal: ") + str(r.stderr.strip() or r.returncode))
 
 
-def create_project(name, directory="", idea="", adopt=False):
-    """New folder (optionally git init), tracked from day one, with the agent started on the idea."""
+def create_project(name, directory="", goal="", adopt=False):
+    """New folder (optionally git init), tracked from day one, and the user's agent opened in it.
+    The goal is shown on the panel (and is part of the status the agent sees at session start);
+    nothing is sent to the agent: what to say first is the user's call."""
     name = name.strip()
     if not name or "/" in name or name.startswith("."):
         raise OpError(L("项目名不能为空，不能包含 /，也不能以 . 开头", "the name can't be empty, contain /, or start with ."))
@@ -1184,11 +1179,11 @@ def create_project(name, directory="", idea="", adopt=False):
     pid, _ = register_project(path)
     status = load_status(pid)
     status["project"]["name"] = name
-    if idea.strip():
-        status["project"]["goal"] = idea.strip().splitlines()[0][:120]
+    if goal.strip():
+        status["project"]["goal"] = goal.strip().splitlines()[0][:200]
     write_json(status_path(pid), status)
     apply_op(pid, "note", {"text": L("从面板新建项目：", "Created from the panel: ") + str(path)}, source="")
-    launch_agent(path, idea.strip() or None)  # the user's words as they wrote them, nothing added
+    launch_agent(path)
     return pid
 
 
@@ -1220,10 +1215,10 @@ def open_session(pid, mode):
 def cmd_new(_directory):
     args = [a for a in sys.argv[2:] if not a.startswith("--")]
     if not args:
-        sys.exit('usage: forthmark.py new NAME [--dir=PATH] [--idea="…"]')
+        sys.exit('usage: forthmark.py new NAME [--dir=PATH] [--goal="…"]')
     opts = dict(a[2:].split("=", 1) for a in sys.argv[2:] if a.startswith("--") and "=" in a)
     try:
-        pid = create_project(args[0], opts.get("dir", ""), opts.get("idea", ""))
+        pid = create_project(args[0], opts.get("dir", ""), opts.get("goal", ""))
     except OpError as e:
         sys.exit(f"error: {e}")
     print(f"created and tracking {load_registry()['projects'][pid]['path']}; the agent is starting in your terminal")
@@ -1668,7 +1663,8 @@ def panel_payload():
     cfg = load_config()
     return {"generated_at": now_iso(), "projects": projects, "lang": ui_lang(),
             "config": {"projects_dir": os.path.expanduser(cfg["projects_dir"]), "terminal": cfg["terminal"],
-                       "agent": cfg["agent"].split()[0], "git_init": cfg["git_init"]}}
+                       "agent": cfg["agent"].split()[0], "git_init": cfg["git_init"],
+                       "terminal_name": "Ghostty" if pick_terminal(cfg["terminal"]) == "ghostty" else L("终端", "Terminal")}}
 
 
 def panel_page(data, api=None):
@@ -1762,9 +1758,9 @@ def make_handler(token):
                 req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
                 if req.get("op") == "create_project":
                     a = req.get("args", {})
-                    pid = create_project(a.get("name", ""), a.get("dir", ""), a.get("idea", ""), a.get("adopt") in ("1", True))
+                    pid = create_project(a.get("name", ""), a.get("dir", ""), a.get("goal", ""), a.get("adopt") in ("1", True))
                     render_panel()
-                    return self.send(200, json.dumps({"ok": True, "text": L("已创建，agent 正在终端里启动", "Created; your agent is starting in the terminal"), "project": pid}, ensure_ascii=False))
+                    return self.send(200, json.dumps({"ok": True, "text": L("已创建，agent 已在终端里打开，等你说第一句话", "Created; your agent is open in the terminal, waiting for your first message"), "project": pid}, ensure_ascii=False))
                 if req.get("op") == "open_session":
                     text = open_session(req["project"], req.get("args", {}).get("mode", ""))
                     return self.send(200, json.dumps({"ok": True, "text": text}, ensure_ascii=False))

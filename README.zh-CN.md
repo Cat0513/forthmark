@@ -39,7 +39,7 @@
 | **被打断，回不来** | 做到一半插进来别的事，原来那件被挤下去，过几天想不起做到哪，只能重新摸索 | 原任务**暂停并写下恢复要点**，新事标「插队」；插队完成后下一步自动指回原任务；「现在在做」里能看到暂停了几天 |
 | **点了「我做完了」其实没做** | 状态说做完了，实际没做，后面的事跟着出错 | 能从文件判断的事项带一个只读核实条件（`exists` / `missing` / `contains`）：点「我做完了」先核实；做完后自动标完成，不用点 |
 | **在面板上回答了，会话却不知道** | 在别处给了答复，还得回到会话里再说一遍 | 面板上「记下决定 / 我做完了 / 对方已回复」后，你下一次在会话里发消息，agent 就会收到这些更新 |
-| **想到一个点子，开工成本太高** | 开终端、建文件夹、cd、启动 agent、交代想法、再接入跟踪 | 面板「＋」：名字 + 一句话想法 → 建文件夹、接入跟踪、在终端里启动 agent 并把想法作为第一句话 |
+| **想到一个点子，开工成本太高** | 开终端、建文件夹、cd、启动 agent、交代想法、再接入跟踪 | 面板「＋」：名字，加一句可选的目标 → 建文件夹、接入跟踪、在终端里打开 agent，第一句话由你来说 |
 | **回来时要重新交代背景** | 新开会话得重新跟 agent 解释项目在哪、在等什么 | 会话开始时自动把规则和当前状态交给 agent，开场就知道做到哪 |
 | **决定和历史找不到** | 当时为什么这么定、那个 bug 怎么回事，要翻聊天记录 | 已解决的等待项（问题 → 答复）、已关闭的 bug、决策都能在面板上回看 |
 
@@ -114,7 +114,7 @@ FORTHMARK_HOME=~/.forthmark-demo/data python3 tools/forthmark.py open
 | 项目文件夹改名 / 移动了 | `python3 tools/forthmark.py move 旧路径 新路径`（状态、历史、文档备注都保留） |
 | 看进度并在面板上操作 | `python3 tools/forthmark.py open`：启动本地服务（仅 127.0.0.1）并打开面板，按钮直接写入状态 |
 | 只看不操作 | 浏览器打开 `~/.forthmark/panel.html`（静态页，每轮自动更新），或输入 `/forthmark` |
-| 新开一个项目 | 面板项目栏的「＋」，或 `forthmark.py new 名字 --idea="…"` |
+| 新开一个项目 | 面板项目栏的「＋」，或 `forthmark.py new 名字 --goal="…"` |
 | 打开这个项目的 agent | 面板顶部三个快捷按钮，用的都是 agent 自己的功能，我们只替你在项目目录里敲命令：<br>**＋** 新会话（`claude`，会拿到项目状态）· **▶ 继续** 最近的会话（`claude --continue`）· **☰** agent 自己的会话列表（`claude --resume`）<br>命令行：`forthmark.py session` / `continue` / `sessions` |
 | 被打断，先做别的 | 直接跟 agent 说「先处理 X」，或者直接开始新工作——agent 会暂停原任务并写恢复要点；也可以在面板上点「暂停」/「继续」 |
 | 停止跟踪 | `/forthmark-remove`（数据保留，可随时再接入） |
@@ -176,7 +176,7 @@ FORTHMARK_HOME=~/.forthmark-demo/data python3 tools/forthmark.py open
 ```json
 {
   "terminal": "auto",             // auto（装了 Ghostty 就用它，否则用「终端」）| ghostty | terminal
-  "agent": "claude {prompt}",          // ＋ 新会话；{prompt} 只会是你自己写的话（新建项目时的想法）；Codex: "codex {prompt}"
+  "agent": "claude",                   // ＋ 新会话（打开时不带任何消息，第一句话由你来说）；Codex: "codex"
   "resume_last": "claude --continue",  // ▶ 最近的会话；Codex: "codex resume --last"
   "resume_pick": "claude --resume",    // ☰ 会话列表；Codex: "codex resume"
   "projects_dir": "~/Documents",  // 新项目默认放这里
@@ -230,7 +230,7 @@ FORTHMARK_HOME=~/.forthmark-demo/data python3 tools/forthmark.py open
 
 - 本地服务只监听 `127.0.0.1`；只接受以 `127.0.0.1` / `localhost` 访问的请求（防 DNS rebinding），写操作还要求页面里的随机令牌、拒绝跨站来源。令牌所在的 `server.json` 只有你能读。
 - `~/.forthmark` 权限为 700。
-- 打开终端时，你写的想法放在文件里、作为一个参数传给 agent，不会被当成 shell 命令执行；路径都经过转义。
+- 打开终端时不会替你输入任何内容，agent 是空白打开的；路径都经过转义。
 - 文档预览只读项目内、白名单类型的文件；Markdown 经 DOMPurify 清洗；菜单栏应用里的外部链接只交给浏览器打开 http / https / mailto。
 - hook 出错一律静默退出，不会打断你的会话；每轮最多拦一次。
 - 发现安全问题请通过 GitHub 的私密漏洞报告（Security → Report a vulnerability）联系，不要公开提 issue。

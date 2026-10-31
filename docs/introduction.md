@@ -28,7 +28,7 @@ Forthmark doesn't change how you use your agent. It has the agent record **concl
 
 **Act on it**
 - Record a decision, "I'm done" or "they replied" in the panel; the running session hears about it
-- ＋ New project: folder, tracking, and your agent started in a terminal with your idea as its first message
+- ＋ New project: folder, tracking, and your agent opened in a terminal; the first message is yours
 - ＋ / ▶ / ☰: new session, most recent session, the agent's own session picker — shortcuts to the agent's native features
 
 **Stay out of the way**

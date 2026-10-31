@@ -38,7 +38,7 @@ Common pains when you push real work forward with agents — especially projects
 | **Interrupted, and never coming back** | Something urgent cuts in, the original task gets buried, and days later you can't remember where it stood | The original task is **paused with a resume note**; the urgent one is marked as such; when it's done, "next" points back to the paused task |
 | **"Marked done" but not actually done** | The status says done, reality disagrees, and later work breaks | Items that files can confirm carry a read-only check (`exists` / `missing` / `contains`): "I'm done" verifies first, and items resolve themselves once the check passes |
 | **You answered in the panel, the session doesn't know** | You decided something elsewhere and have to repeat it in the session | Decisions, "done" and "they replied" from the panel reach the running session with your next message |
-| **An idea, but starting is too much friction** | Open a terminal, make a folder, cd, start the agent, explain the idea, set up tracking | Panel "＋": a name and one sentence → folder created, tracked, and your agent started in a terminal with your idea as its first message |
+| **An idea, but starting is too much friction** | Open a terminal, make a folder, cd, start the agent, explain the idea, set up tracking | Panel "＋": a name and an optional one-line goal → folder created, tracked, and your agent opened in a terminal, ready for your first message |
 | **Re-explaining context in every new session** | A fresh session has to be told where the project stands and what's pending | Each new session receives the rules and current status automatically |
 | **Decisions and history are hard to find** | Why was it decided that way? What happened with that bug? Search the chat logs | Resolved waits (question → answer), closed bugs and decisions are all browsable in the panel |
 
@@ -110,7 +110,7 @@ FORTHMARK_HOME=~/.forthmark-demo/data python3 tools/forthmark.py open
 | The project folder was renamed or moved | `python3 tools/forthmark.py move OLD_PATH NEW_PATH` (status, history and doc notes are kept) |
 | See progress and act from the panel | `python3 tools/forthmark.py open`: starts the local service (127.0.0.1 only) and opens the panel; buttons write to the status directly |
 | Look without acting | Open `~/.forthmark/panel.html` in a browser (static, refreshed every turn), or type `/forthmark` |
-| Start a new project | "＋" in the panel's project bar, or `forthmark.py new NAME --idea="…"` |
+| Start a new project | "＋" in the panel's project bar, or `forthmark.py new NAME --goal="…"` |
 | Open the agent in this project | Three shortcuts at the top of the panel, all the agent's own features — we only type the command in the project folder for you:<br>**＋** new session (`claude`, receives the project status) · **▶** most recent session (`claude --continue`) · **☰** the agent's own session picker (`claude --resume`)<br>CLI: `forthmark.py session` / `continue` / `sessions` |
 | Get interrupted | Tell the agent "handle X first", or just start the new work — the agent pauses the original task with a resume note; or use Pause / Resume in the panel |
 | Stop tracking | `/forthmark-remove` (data is kept; you can track it again any time) |
@@ -173,7 +173,7 @@ all reading and writing the same ~/.forthmark/projects/<project>/status.json
 ```jsonc
 {
   "terminal": "auto",                  // auto (Ghostty if installed, else Terminal) | ghostty | terminal
-  "agent": "claude {prompt}",          // ＋ new session; {prompt} is only ever your own words (the idea of a new project). Codex: "codex {prompt}"
+  "agent": "claude",                   // ＋ new session (it starts empty: the first message is yours). Codex: "codex"
   "resume_last": "claude --continue",  // ▶ most recent session. Codex: "codex resume --last"
   "resume_pick": "claude --resume",    // ☰ session picker. Codex: "codex resume"
   "projects_dir": "~/Documents",       // where new projects go
@@ -227,7 +227,7 @@ Other limits:
 
 - The local service listens on `127.0.0.1` only and answers only requests addressed to `127.0.0.1` / `localhost` (DNS rebinding protection); writes also require the page's random token and reject cross-site origins. `server.json`, which holds the token, is readable only by you.
 - `~/.forthmark` is mode 700.
-- When opening a terminal, your idea travels in a file and is passed to the agent as a single argument — never interpreted by the shell; paths are quoted.
+- Opening a terminal types nothing on your behalf: the agent starts empty and paths are quoted.
 - Doc previews read only whitelisted file types inside the project; markdown is sanitized with DOMPurify; the menu bar app hands only http / https / mailto links to the browser.
 - Hook failures exit silently and never interrupt your session; a turn is blocked at most once.
 - Please report security issues privately via GitHub's private vulnerability reporting (Security → Report a vulnerability), not in public issues.

@@ -802,9 +802,9 @@ function newProjectDialog() {
     <h3>${L("新建项目", "New project")}</h3>
     <label>${L("名字", "Name")}<input type="text" name="name" placeholder="${L("比如：健身打卡小工具", "e.g. habit-tracker")}" autofocus required></label>
     <label>${L("位置", "Location")}<input type="text" name="dir" value="${esc(base)}/"></label>
-    <label>${L("想法（作为第一句话交给 agent）", "Idea (given to the agent as its first message)")}<textarea name="idea" placeholder="${L("想做什么、先做到什么程度，越具体越好", "What you want to build and how far to take it first. The more specific, the better")}"></textarea></label>
-    <div class="hint">${L(`会创建文件夹${DATA.config?.git_init ? "并 git init" : ""}、接入跟踪，然后在 ${esc(DATA.config?.terminal || "终端")} 里启动 ${esc(DATA.config?.agent || "claude")}。`, `Creates the folder${DATA.config?.git_init ? " (git init)" : ""}, tracks it, then starts ${esc(DATA.config?.agent || "claude")} in ${esc(DATA.config?.terminal || "a terminal")}.`)}</div>
-    <div class="row2"><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("创建并开始", "Create and start")}</button></div>
+    <label>${L("目标（可选，显示在面板上）", "Goal (optional, shown on the panel)")}<input type="text" name="goal" placeholder="${L("一句话说明要做成什么，比如：每天打卡、每周看到进步", "What it should become, in one line, e.g. log workouts daily, see progress weekly")}"></label>
+    <div class="hint">${L(`会创建文件夹${DATA.config?.git_init ? "并 git init" : ""}、接入跟踪，然后在 ${esc(DATA.config?.terminal_name || "终端")} 里打开 ${esc(DATA.config?.agent || "claude")}，第一句话由你来说。`, `Creates the folder${DATA.config?.git_init ? " (git init)" : ""}, tracks it, then opens ${esc(DATA.config?.agent || "claude")} in ${esc(DATA.config?.terminal_name || "a terminal")}. You type the first message.`)}</div>
+    <div class="row2"><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("创建并打开", "Create and open")}</button></div>
   </form>`;
   document.body.appendChild(m);
   const f = m.querySelector("form"), name = f.elements.name, dir = f.elements.dir;
@@ -815,7 +815,7 @@ function newProjectDialog() {
   m.addEventListener("click", e => { if (e.target === m || e.target.closest("[data-close]")) close(); });
   f.addEventListener("submit", async e => {
     e.preventDefault();
-    const args = { name: name.value.trim(), dir: dir.value.trim(), idea: f.elements.idea.value.trim() };
+    const args = { name: name.value.trim(), dir: dir.value.trim(), goal: f.elements.goal.value.trim() };
     const res = await (await fetch("/api/op", { method: "POST", headers: { "Content-Type": "application/json", "X-Forthmark-Token": API.token },
       body: JSON.stringify({ op: "create_project", args }) })).json();
     if (!res.ok) return toast(L("没有成功：", "Didn't work: ") + res.error);
