@@ -103,7 +103,14 @@ button { font: inherit; cursor: pointer; }
 /* quiet corner button (popover): no frame until hovered */
 .iconbtn.ghost { width: 22px; height: 22px; border: 0; background: transparent; color: var(--ink3); border-radius: 6px; }
 .iconbtn.ghost:hover { background: rgba(127,127,127,.16); color: var(--ink); }
-.projects { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.projbar { display: flex; gap: 6px; align-items: center; }
+.projects { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+.projects::-webkit-scrollbar { display: none; }
+/* more projects off to one side: fade that edge (set by fitProjects) */
+.projects.fade-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.projects.fade-l { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+.projects.fade-l.fade-r { -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent); }
+.projects button { flex: none; }
 .projects button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card);
   color: var(--ink2); border-radius: 999px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
 .projects button.on { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
@@ -127,8 +134,9 @@ button { font: inherit; cursor: pointer; }
             mask-image: linear-gradient(to bottom, transparent 0, #000 18px); }
 }
 
-.projects .addp { padding: 3px 10px; color: var(--ink3); border-style: dashed; }
-.projects .addp:hover { color: var(--blue); border-color: var(--blue); }
+.projbar .addp { flex: none; display: inline-flex; align-items: center; border: 1px dashed var(--line); background: var(--card);
+  border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--ink3); cursor: pointer; font-family: inherit; }
+.projbar .addp:hover { color: var(--blue); border-color: var(--blue); }
 .contbtn { border: 1px solid var(--green-line); background: var(--green-bg); color: var(--green); border-radius: 999px;
   padding: 3px 11px; font-size: 12px; font-weight: 600; white-space: nowrap; flex: none; }
 .contbtn:hover { filter: brightness(.97); }
@@ -477,10 +485,10 @@ function render() {
   };
 
   // header
-  const chips = projects.length > 1 || API ? `<div class="projects">${projects.map(p => {
+  const chips = projects.length > 1 || API ? `<div class="projbar"><div class="projects">${projects.map(p => {
     const n = p.status.waiting.filter(w => w.status === "open").length;
     return `<button data-project="${esc(p.id)}" class="${p.id === P.id ? "on" : ""}"><span class="dot" style="--c:${pulseOf(p).c}"></span>${esc(p.status.project.name)}${n ? `<span class="n">${n}</span>` : ""}</button>`;
-  }).join("")}${API ? `<button class="addp" id="newproj" title="${L("新建项目：建文件夹、接入跟踪，并在终端里启动 agent", "New project: create a folder, track it, and start your agent in a terminal")}">＋</button>` : ""}</div>` : "";
+  }).join("")}</div>${API ? `<button class="addp" id="newproj" title="${L("新建项目：建文件夹、接入跟踪，并在终端里启动 agent", "New project: create a folder, track it, and start your agent in a terminal")}">＋</button>` : ""}</div>` : "";
   const head = `<div class="head">
     <div class="head-top"><h1 title="${esc(P.path)}">${esc(S.project.name)}</h1><span class="spacer"></span>
       ${API ? `<span class="sessbtns">
@@ -745,8 +753,34 @@ function render() {
   saveState();
   fitPopover();
   balanceColumns();
+  fitProjects();
   if (!seen) store.set("forthmark-seen:" + P.id, new Date().toISOString());
 }
+
+// Project chips scroll sideways when there are many: keep the current one in view and fade the
+// edge that has more. A vertical mouse wheel scrolls them too (trackpads already scroll sideways).
+let projectsShown = null;
+function fitProjects() {
+  const el = document.querySelector(".projects");
+  if (!el) return;
+  const on = el.querySelector("button.on");
+  if (on && projectsShown !== state.project) {
+    projectsShown = state.project;
+    const l = on.offsetLeft - el.offsetLeft, r = l + on.offsetWidth;
+    if (l < el.scrollLeft) el.scrollLeft = l - 8;
+    else if (r > el.scrollLeft + el.clientWidth) el.scrollLeft = r - el.clientWidth + 8;
+  }
+  el.classList.toggle("fade-l", el.scrollLeft > 2);
+  el.classList.toggle("fade-r", el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+}
+document.addEventListener("scroll", e => { if (e.target.classList?.contains("projects")) fitProjects(); }, true);
+document.addEventListener("wheel", e => {
+  const el = e.target.closest?.(".projects");
+  if (!el || el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+  el.scrollLeft += e.deltaY;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener("resize", fitProjects);
 
 // Update only what changed: keeps open <details>, the focused search box and scroll position.
 function patch(el, html) {
