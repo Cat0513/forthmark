@@ -44,24 +44,46 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from fmshared import IS_WINDOWS, data_home, native_path, replace_file, utf8_stdio
+
 KIT = Path(__file__).resolve().parent.parent
-def _home():
-    return Path(os.environ.get("FORTHMARK_HOME") or "~/.forthmark").expanduser()
-
-
-HOME = _home()
+HOME = data_home()
 CLAUDE_DIR = Path(os.environ.get("FORTHMARK_CLAUDE_DIR", "~/.claude")).expanduser()
 SCHEMA_PATH = KIT / "schema" / "status.schema.json"
 PANEL_TEMPLATE = KIT / "templates" / "panel.html"
 RULES_TEMPLATE = KIT / "templates" / "RULES.md"
+
+
+def bare_path(path):
+    """A Windows program path that needs no quotes, for commands that may run in Git Bash or PowerShell:
+    PowerShell prints a quoted first word instead of running it. None if spaces can't be avoided."""
+    path = str(path)
+    if " " in path:
+        import ctypes
+        buf = ctypes.create_unicode_buffer(32768)
+        if ctypes.windll.kernel32.GetShortPathNameW(path, buf, len(buf)):
+            path = buf.value
+    return None if " " in path else path.replace("\\", "/")
+
+
 # How agents call us. Quoted, so the kit can live anywhere (spaces included); rules, /forthmark commands
 # and the permission rule all use exactly this string.
-CLI = f"python3 {shlex.quote(str(KIT / 'tools' / 'forthmark.py'))}"
+if IS_WINDOWS:
+    CLI = f"{bare_path(sys.executable) or 'python'} {shlex.quote((KIT / 'tools' / 'forthmark.py').as_posix())}"
+else:
+    CLI = f"python3 {shlex.quote(str(KIT / 'tools' / 'forthmark.py'))}"
 REGISTRY = HOME / "registry.json"
 PANEL = HOME / "panel.html"
 HOOK_MARKER = "FORTHMARK_HOOK=1"
-def ours(command):
-    return HOOK_MARKER in (command or "")
+HOOK_ARG = "--forthmark-hook"  # Windows: no shell to set a variable in, so the mark is an ignored argument
+
+
+def ours(hook):
+    """Whether a settings hook entry (or status line command) is one of ours."""
+    text = hook if isinstance(hook, str) else " ".join([hook.get("command") or ""] + (hook.get("args") or [])) if hook else ""
+    return HOOK_MARKER in text or HOOK_ARG in text
+
+
 ACTIVITY_DAYS = 21  # the cadence strip: about three weeks is what "am I keeping it moving?" needs
 
 
@@ -84,12 +106,12 @@ def save_registry(reg):
 
 def project_id(path):
     slug = re.sub(r"[^\w.-]+", "-", path.name).strip("-") or "project"
-    return f"{slug}-{hashlib.sha1(str(path).encode()).hexdigest()[:6]}"
+    return f"{slug}-{hashlib.sha1(os.path.normcase(str(path)).encode()).hexdigest()[:6]}"
 
 
 def find_project(directory):
     """(id, entry) of the tracked project containing directory, or None."""
-    directory = Path(directory).expanduser().resolve()
+    directory = Path(native_path(directory)).expanduser().resolve()
     best = None
     for pid, entry in load_registry()["projects"].items():
         root = Path(entry["path"])
@@ -130,7 +152,7 @@ def write_json(path, data):
 def git_root(path):
     try:
         out = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=path, capture_output=True,
-                             text=True, timeout=5, check=True).stdout.strip()
+                             encoding="utf-8", errors="replace", timeout=5, check=True).stdout.strip()
         return Path(out).resolve() if out else None
     except (subprocess.SubprocessError, FileNotFoundError, NotADirectoryError):
         return None
@@ -483,7 +505,7 @@ def archive_status(pid, force=False):
         for path, data in ((archive_path(pid), arch), (status_path(pid), live)):
             tmp = path.with_suffix(".json.tmp")
             write_json(tmp, data)
-            os.replace(tmp, path)
+            replace_file(tmp, path)
     return moved
 
 
@@ -712,7 +734,7 @@ def record_usage(pid, transcript, session_id, blocking):
     sess["seen"] = (sess["seen"] + list(calls))[-200:]
     tmp = usage_path(pid).with_suffix(".json.tmp")
     write_json(tmp, u)
-    os.replace(tmp, usage_path(pid))
+    replace_file(tmp, usage_path(pid))
 
 
 def usage_summary(pid):
@@ -729,7 +751,7 @@ def fmt_tokens(n):
 def git_out(project_path, *args):
     try:
         return subprocess.run(["git", *args], cwd=project_path, capture_output=True,
-                              text=True, timeout=10, check=True).stdout.split()
+                              encoding="utf-8", errors="replace", timeout=10, check=True).stdout.split()
     except (subprocess.SubprocessError, FileNotFoundError, NotADirectoryError):
         return []
 
@@ -819,7 +841,9 @@ def render_panel():
 
 
 CHROME_PATHS = ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                "/Applications/Chromium.app/Contents/MacOS/Chromium"]
+                "/Applications/Chromium.app/Contents/MacOS/Chromium",
+                os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
+                os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe")]
 
 
 def cmd_check(_directory):
@@ -856,11 +880,19 @@ def cmd_check(_directory):
     return 1 if failures else 0
 
 
+def open_path(target):
+    """Open a file or URL with the system's default app."""
+    if IS_WINDOWS:
+        os.startfile(str(target))
+    else:
+        subprocess.run(["open", str(target)])
+
+
 def cmd_html(_directory):
     path = render_panel()
     print(path)
     if "--open" in sys.argv:
-        subprocess.run(["open", str(path)])
+        open_path(path)
     return 0
 
 
@@ -868,8 +900,8 @@ def cmd_html(_directory):
 # Read-only discovery of a project's docs and scripts, plus an overlay (tags, notes,
 # pins, roles) stored on our side in docs.json. Project files are never written.
 
-DOC_EXTS = {".md", ".markdown", ".mdx", ".txt", ".sh", ".bash", ".zsh", ".command"}
-SCRIPT_EXTS = {".sh", ".bash", ".zsh", ".command"}
+DOC_EXTS = {".md", ".markdown", ".mdx", ".txt", ".sh", ".bash", ".zsh", ".command", ".ps1", ".bat", ".cmd"}
+SCRIPT_EXTS = {".sh", ".bash", ".zsh", ".command", ".ps1", ".bat", ".cmd"}
 DOC_SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "dist", "build", ".next", "__pycache__", "vendor"}
 DOC_LIMIT = 400
 PREVIEW_LIMIT = 1_000_000
@@ -891,21 +923,21 @@ def load_docs_meta(pid):
 def save_docs_meta(pid, meta):
     tmp = docs_meta_path(pid).with_suffix(".json.tmp")
     write_json(tmp, meta)
-    os.replace(tmp, docs_meta_path(pid))
+    replace_file(tmp, docs_meta_path(pid))
 
 
 def list_doc_files(project_path):
     """Relative paths of docs/scripts: git-tracked plus untracked-but-not-ignored, else a pruned walk."""
     try:
         rels = subprocess.run(["git", "ls-files", "-co", "--exclude-standard", "-z"], cwd=project_path,
-                              capture_output=True, text=True, timeout=10, check=True).stdout.split("\0")
+                              capture_output=True, encoding="utf-8", errors="replace", timeout=10, check=True).stdout.split("\0")
     except (subprocess.SubprocessError, FileNotFoundError, NotADirectoryError):
         rels = None
     if not rels or rels == [""]:
         rels = []
         for root, dirs, names in os.walk(project_path):
             dirs[:] = [d for d in dirs if d not in DOC_SKIP_DIRS and not d.startswith(".")]
-            rels += [os.path.relpath(os.path.join(root, n), project_path) for n in names]
+            rels += [os.path.relpath(os.path.join(root, n), project_path).replace(os.sep, "/") for n in names]
     out = [r for r in rels if r and Path(r).suffix.lower() in DOC_EXTS
            and not any(part in DOC_SKIP_DIRS for part in Path(r).parts[:-1])]
     return sorted(set(out))[:DOC_LIMIT]
@@ -1039,6 +1071,7 @@ def clean_env():
 CONFIG_PATH = HOME / "config.json"
 DEFAULT_CONFIG = {
     "terminal": "auto",               # auto (Ghostty if installed, else Terminal) | ghostty | terminal
+                                      # Windows: auto (Windows Terminal if installed, else PowerShell) | windows-terminal | powershell
     # Three ways in, all the agent's own: we only type the command (Codex: "codex",
     # "codex resume --last", "codex resume").
     "agent": "claude",                # ＋ new session; it starts empty: the first message is always the user's
@@ -1048,18 +1081,20 @@ DEFAULT_CONFIG = {
     "git_init": True,                 # git init new project folders
     "lang": "auto",                   # auto (the system language) | zh | en
 }
-TERMINALS = ("auto", "ghostty", "terminal")
+TERMINALS = ("auto", "windows-terminal", "powershell") if IS_WINDOWS else ("auto", "ghostty", "terminal")
 
 
 def pick_terminal(choice):
     if choice != "auto":
         return choice
+    if IS_WINDOWS:
+        return "windows-terminal" if shutil.which("wt") else "powershell"
     apps = (Path("/Applications/Ghostty.app"), Path.home() / "Applications" / "Ghostty.app")
     return "ghostty" if any(a.exists() for a in apps) else "terminal"
 
 
 def system_lang():
-    """'zh' when macOS's first preferred language is Chinese, else 'en'. Cached for a day: `defaults` is slow."""
+    """'zh' when the system's first preferred language is Chinese, else 'en'. Cached for a day: `defaults` is slow."""
     cache = HOME / "lang.cache"
     try:
         if time.time() - cache.stat().st_mtime < 86400:
@@ -1068,8 +1103,12 @@ def system_lang():
         pass
     first = ""
     try:
-        out = subprocess.run(["defaults", "read", "-g", "AppleLanguages"], capture_output=True, text=True, timeout=3).stdout
-        first = out.strip("()\n ").split(",")[0].strip().strip('"')
+        if IS_WINDOWS:
+            import ctypes
+            first = "zh" if ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF == 0x04 else "en"  # LANG_CHINESE
+        else:
+            out = subprocess.run(["defaults", "read", "-g", "AppleLanguages"], capture_output=True, text=True, timeout=3).stdout
+            first = out.strip("()\n ").split(",")[0].strip().strip('"')
     except (OSError, subprocess.SubprocessError):
         pass
     first = first or os.environ.get("LANG", "")
@@ -1135,6 +1174,24 @@ def load_config():
     return cfg
 
 
+def powershell_quote(text):
+    return "'" + str(text).replace("'", "''") + "'"
+
+
+def write_windows_launch(script, path, command):
+    lines = [f"Remove-Item Env:{k} -ErrorAction SilentlyContinue" for k in SESSION_ENV]
+    lines += [f"Set-Location -LiteralPath {powershell_quote(path)}", command, ""]
+    script.write_text("\n".join(lines), encoding="utf-8-sig")  # Windows PowerShell reads a file without a BOM as ANSI
+
+
+def launch_windows(path, script, terminal):
+    powershell = ["powershell", "-NoExit", "-ExecutionPolicy", "Bypass", "-File", str(script)]
+    if terminal == "windows-terminal":
+        subprocess.Popen(["wt", "-d", str(path).replace(";", "\\;")] + powershell, env=clean_env())  # ";" separates wt commands
+    else:
+        subprocess.Popen(powershell, cwd=path, env=clean_env(), creationflags=subprocess.CREATE_NEW_CONSOLE)
+
+
 def launch_agent(path, command=None):
     """Open a new terminal window in `path` running the user's agent, with nothing typed for them:
     the first message is always the user's. `command` replaces the agent command (e.g. to resume)."""
@@ -1144,11 +1201,21 @@ def launch_agent(path, command=None):
     launch_dir = HOME / "launch"
     launch_dir.mkdir(parents=True, exist_ok=True)
     for old in launch_dir.iterdir():  # leftovers older than a day
-        if time.time() - old.stat().st_mtime > 86400:
-            old.unlink(missing_ok=True)
+        try:
+            if time.time() - old.stat().st_mtime > 86400:
+                old.unlink(missing_ok=True)
+        except OSError:  # Windows: a script still in use can't be deleted
+            pass
     stamp = f"{int(time.time() * 1000)}"
     # "{prompt}" is from configs written before the first message became the user's; it expands to nothing.
     agent = cfg["agent"].replace("{prompt}", "").strip()
+    if IS_WINDOWS:
+        script = launch_dir / f"{stamp}.ps1"
+        write_windows_launch(script, path, command or agent)
+        try:
+            return launch_windows(path, script, pick_terminal(cfg["terminal"]))
+        except OSError as e:
+            raise OpError(L("打不开终端：", "couldn't open the terminal: ") + str(e))
     lines = ["#!/bin/zsh -l", f"unset {' '.join(SESSION_ENV)}", f"cd {shlex.quote(str(path))} || exit 1", command or agent]
     script = launch_dir / f"{stamp}.command"
     script.write_text("\n".join(lines + ["exec zsh -l", ""]), encoding="utf-8")
@@ -1169,6 +1236,8 @@ def create_project(name, directory="", goal="", adopt=False):
     name = name.strip()
     if not name or "/" in name or name.startswith("."):
         raise OpError(L("项目名不能为空，不能包含 /，也不能以 . 开头", "the name can't be empty, contain /, or start with ."))
+    if IS_WINDOWS and (re.search(r'[<>:"\\|?*]', name) or name.endswith((".", " "))):
+        raise OpError(L('项目名不能包含 < > : " \\ | ? *，也不能以空格或 . 结尾', 'the name can\'t contain < > : " \\ | ? * or end with a space or .'))
     cfg = load_config()
     path = Path(os.path.expanduser(directory.strip() or str(Path(os.path.expanduser(cfg["projects_dir"])) / name))).resolve()
     if path.exists() and any(path.iterdir()) and not adopt:
@@ -1261,7 +1330,9 @@ def run_check(check, project_path):
     """Evaluate a read-only 'done' condition. Returns (ok, why-not)."""
     for cond in [c.strip() for c in check.split("&&") if c.strip()]:
         kind, _, rest = cond.partition(":")
-        path, _, text = rest.partition(":") if kind == "contains" else (rest, "", "")
+        drive = 2 if re.match(r"\s*[A-Za-z]:[\\/]", rest) else 0  # "contains:C:\\x:text"
+        path, _, text = rest[drive:].partition(":") if kind == "contains" else (rest[drive:], "", "")
+        path = rest[:drive] + path
         full = Path(os.path.expanduser(path.strip()))
         if not full.is_absolute():
             full = project_path / full
@@ -1495,7 +1566,7 @@ def apply_doc_op(pid, op, args):
         save_docs_meta(pid, meta)
         return L("已清除这份文档的标记", "Cleared this doc's notes")
     if op == "doc_open":
-        subprocess.run(["open", str(safe_doc_path(pid, rel))])
+        open_path(safe_doc_path(pid, rel))
         return L("已用默认程序打开", "Opened in the default app")
     fields = {k: args[k] for k in ("tags", "note", "pinned", "hidden", "role", "purpose") if k in args}
     doc_set_meta(pid, rel, **fields)
@@ -1525,7 +1596,7 @@ def apply_op(pid, op, args, source="panel"):
         raise OpError("; ".join(errors[:3]))
     tmp = status_path(pid).with_suffix(".json.tmp")
     write_json(tmp, status)
-    os.replace(tmp, status_path(pid))  # atomic: the agent never sees a half-written file
+    replace_file(tmp, status_path(pid))  # atomic: the agent never sees a half-written file
     return text
 
 
@@ -1602,10 +1673,10 @@ def run_notifications(dry_run=False, force=False, mark=False):
         title = f"Forthmark · {status['project']['name']}"
         body = L("；", "; ").join(line for _, line in fresh[:3]) + (L(f"；还有 {len(fresh) - 3} 项", f"; {len(fresh) - 3} more") if len(fresh) > 3 else "")
         shown.append((title, body))
-        if not dry_run:
+        if not dry_run and not IS_WINDOWS:  # Windows: the desktop app posts them, through /api/notify
             script = f'display notification {json.dumps(body, ensure_ascii=False)} with title {json.dumps(title, ensure_ascii=False)}'
             subprocess.run(["osascript", "-e", script], capture_output=True, timeout=10)
-        if not dry_run or mark:
+        if (not dry_run and not IS_WINDOWS) or mark:
             for k, _ in fresh:
                 sent[f"{pid}:{k}"] = today
     if not dry_run or mark:
@@ -1664,7 +1735,8 @@ def panel_payload():
     return {"generated_at": now_iso(), "projects": projects, "lang": ui_lang(),
             "config": {"projects_dir": os.path.expanduser(cfg["projects_dir"]), "terminal": cfg["terminal"],
                        "agent": cfg["agent"].split()[0], "git_init": cfg["git_init"],
-                       "terminal_name": "Ghostty" if pick_terminal(cfg["terminal"]) == "ghostty" else L("终端", "Terminal")}}
+                       "terminal_name": {"ghostty": "Ghostty", "windows-terminal": "Windows Terminal", "powershell": "PowerShell"}.get(
+                           pick_terminal(cfg["terminal"]), L("终端", "Terminal"))}}
 
 
 def panel_page(data, api=None):
@@ -1790,12 +1862,26 @@ def server_url():
         return None
 
 
+def spawn_service():
+    """Start the local service in the background, independent of this process and its terminal."""
+    detach = ({"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP} if IS_WINDOWS
+              else {"start_new_session": True})
+    HOME.mkdir(parents=True, exist_ok=True)
+    with open(HOME / "server.log", "a", encoding="utf-8") as log:
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "serve"], env=clean_env(),
+                         stdout=log, stderr=log, stdin=subprocess.DEVNULL, **detach)
+
+
 def cmd_serve(_directory):
     import http.server
     import secrets
     for k in SESSION_ENV:  # a long-running service must not carry the session it was started from
         os.environ.pop(k, None)
     HOME.mkdir(parents=True, exist_ok=True)
+    running = server_url()
+    if running:  # one service per data dir: a second would overwrite server.json and its token
+        print(f"already running: {running}", flush=True)
+        return 0
     token = secrets.token_urlsafe(24)
     handler = make_handler(token)
     server = None
@@ -1831,6 +1917,9 @@ def cmd_serve(_directory):
         return 0
     server.server_close()
     print("code changed, restarting", flush=True)
+    if IS_WINDOWS:  # os.execv there starts a new process and detaches it from its console anyway
+        spawn_service()
+        return 0
     os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve()), "serve"])
 
 
@@ -1842,18 +1931,16 @@ def cmd_stop(_directory):
     try:
         os.kill(pid, 15)
         print(f"stopped (pid {pid})")
-    except ProcessLookupError:
+    except OSError:  # Windows reports a gone process differently
         print("not running")
-    SERVER_INFO.unlink()
+    SERVER_INFO.unlink(missing_ok=True)
     return 0
 
 
 def cmd_open(_directory):
     url = server_url()
     if not url:
-        log = open(HOME / "server.log", "a")
-        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "serve"], env=clean_env(),
-                         stdout=log, stderr=log, stdin=subprocess.DEVNULL, start_new_session=True)
+        spawn_service()
         for _ in range(30):
             time.sleep(0.1)
             url = server_url()
@@ -1863,7 +1950,7 @@ def cmd_open(_directory):
         sys.exit(f"could not start the local service, see {HOME / 'server.log'}")
     print(url)
     if "--no-browser" not in sys.argv:
-        subprocess.run(["open", url])
+        open_path(url)
     return 0
 
 
@@ -1878,10 +1965,30 @@ def hook_command(script):
     return f'{HOOK_MARKER} {shlex.quote(sys.executable)} {shlex.quote(str(KIT / "hooks" / script))}'
 
 
+def hook_entry(script):
+    """A settings entry for a hook. Windows: exec form, which runs the same with or without Git Bash."""
+    if IS_WINDOWS:
+        return {"type": "command", "command": sys.executable, "args": [(KIT / "hooks" / script).as_posix(), HOOK_ARG]}
+    return {"type": "command", "command": hook_command(script)}
+
+
+def statusline_command():
+    """The status line has no exec form; on Windows this string must work in both Git Bash and PowerShell."""
+    if not IS_WINDOWS:
+        return hook_command("statusline.py")
+    script = (KIT / "hooks" / "statusline.py").as_posix()
+    exe = bare_path(sys.executable)
+    if exe:
+        return f'{exe} "{script}" {HOOK_ARG}'
+    return f"""powershell -NoProfile -Command "& '{sys.executable}' '{script}' {HOOK_ARG}\""""
+
+
 def home_rule_path():
     try:
-        return "~/" + str(HOME.relative_to(Path.home())) + "/**"
+        return "~/" + HOME.relative_to(Path.home()).as_posix() + "/**"
     except ValueError:
+        if IS_WINDOWS:  # permission rules spell C:\\x as //c/x
+            return f"//{HOME.drive[0].lower()}/" + HOME.as_posix()[3:] + "/**"
         return "/" + str(HOME) + "/**"
 
 
@@ -1889,7 +1996,7 @@ def drop_our_hooks(settings):
     hooks = settings.get("hooks", {})
     for event in list(hooks):
         hooks[event] = [g for g in hooks[event]
-                        if not any(ours(h.get("command")) for h in g.get("hooks", []))]
+                        if not any(ours(h) for h in g.get("hooks", []))]
         if not hooks[event]:
             del hooks[event]
     if "hooks" in settings and not settings["hooks"]:
@@ -1910,11 +2017,11 @@ def cmd_setup(_directory):
     hooks = settings.setdefault("hooks", {})
     hooks.setdefault("SessionStart", []).append({
         "matcher": "startup|resume|clear|compact",
-        "hooks": [{"type": "command", "command": hook_command("session_start.py")}]})
+        "hooks": [hook_entry("session_start.py")]})
     hooks.setdefault("Stop", []).append({
-        "hooks": [{"type": "command", "command": hook_command("stop_check.py")}]})
+        "hooks": [hook_entry("stop_check.py")]})
     hooks.setdefault("UserPromptSubmit", []).append({
-        "hooks": [{"type": "command", "command": hook_command("prompt_submit.py")}]})
+        "hooks": [hook_entry("prompt_submit.py")]})
 
     # Status line: ours, appended to whatever the user already had (kept in the manifest).
     prev_sl = old_manifest.get("prev_statusline")
@@ -1922,11 +2029,11 @@ def cmd_setup(_directory):
     if current.get("command") and not ours(current["command"]):
         prev_sl = current["command"]
     if "--no-statusline" not in sys.argv:
-        settings["statusLine"] = {"type": "command", "command": hook_command("statusline.py")}
+        settings["statusLine"] = {"type": "command", "command": statusline_command()}
 
     rule_path = home_rule_path()
     wanted_allow = [f"Read({rule_path})", f"Edit({rule_path})", f"Write({rule_path})",
-                    f"Bash({CLI}:*)"]
+                    f"Bash({CLI}:*)"] + ([f"PowerShell({CLI} *)"] if IS_WINDOWS else [])
     perms = settings.setdefault("permissions", {})
     # What we added last time goes first: the kit or the data dir may have moved since.
     perms["allow"] = [r for r in perms.get("allow", []) if r not in old_manifest.get("allow", [])]
@@ -2008,6 +2115,7 @@ COMMANDS_CLI = {
 
 
 def main():
+    utf8_stdio()
     if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS_CLI:
         sys.exit(__doc__)
     args = [a for a in sys.argv[2:] if not a.startswith("--")]

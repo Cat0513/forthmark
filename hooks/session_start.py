@@ -5,29 +5,15 @@ recording rules and the current status, so it can resume without being re-briefe
 Untracked directories: exits silently. Never fails the session.
 """
 import json
-import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
-
-
-def data_home():
-    return Path(os.environ.get("FORTHMARK_HOME") or "~/.forthmark").expanduser()
-
-
-def tracked(cwd):
-    """Cheap check against the registry, so untracked projects never load the toolkit."""
-    home = data_home()
-    try:
-        projects = json.loads((home / "registry.json").read_text(encoding="utf-8"))["projects"].values()
-    except (OSError, ValueError, KeyError):
-        return False
-    cwd = os.path.realpath(cwd)
-    return any(cwd == p["path"] or cwd.startswith(p["path"].rstrip("/") + "/") for p in projects)
+from fmshared import tracked, utf8_stdio  # noqa: E402
 
 
 def main():
+    utf8_stdio()
     hook_input = json.load(sys.stdin)
     if not tracked(hook_input.get("cwd") or "."):
         return
