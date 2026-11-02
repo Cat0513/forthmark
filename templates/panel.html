@@ -164,6 +164,11 @@ button { font: inherit; cursor: pointer; }
 .modal .hint { font-size: 11px; color: var(--ink3); }
 .modal .row2 { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .modal .row2 button { padding: 5px 14px; font-size: 12.5px; }
+.modal .row2 .keys { margin-right: auto; align-self: center; font-size: 11px; color: var(--ink3); }
+.modal .row2 button:disabled { opacity: .45; cursor: default; filter: none; }
+.modal .quote { font-size: 12.5px; line-height: 1.5; color: var(--ink2); background: var(--sunk); border-left: 3px solid var(--line);
+  border-radius: 4px 8px 8px 4px; padding: 7px 10px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 30vh; overflow-y: auto; }
+.modal input[type=text]:focus, .modal textarea:focus { outline: none; border-color: var(--blue); }
 
 /* tabs (narrow only) */
 .tabs { display: flex; gap: 4px; background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
@@ -285,8 +290,9 @@ details[open] summary::before { content: "▾ "; }
 
 .footer .mono { overflow-wrap: anywhere; min-width: 0; }
 .footer { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--ink3); padding: 0 4px; }
-.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--card);
-  padding: 7px 14px; border-radius: 999px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: max-content; max-width: min(420px, calc(100vw - 32px));
+  background: #111827; color: #fff; border: 1px solid rgba(255,255,255,.14); font-weight: 500; padding: 6px 12px; border-radius: 9px; font-size: 12px; line-height: 1.45; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 40;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
 .toast.show { opacity: 1; }
 
 /* 文档 */
@@ -882,9 +888,54 @@ function newProjectDialog() {
     close(); toast(res.text); state.project = res.project; await refresh(); render();
   });
   setTimeout(() => name.focus(), 30);
-  // In the popover make room for the form; give the size back when it closes.
-  if (NATIVE && SHELL === "popover") NATIVE.postMessage({ action: "resize", height: Math.max(560, document.body.scrollHeight) });
+  makeRoom(m, 560);
+}
+
+// In the popover make room for a dialog; give the size back when it closes.
+function makeRoom(m, height) {
+  if (NATIVE && SHELL === "popover") NATIVE.postMessage({ action: "resize", height: Math.max(height, document.body.scrollHeight) });
   new MutationObserver((_, obs) => { if (!m.isConnected) { obs.disconnect(); fitPopover(); } }).observe(document.body, { childList: true });
+}
+
+// The panel's text dialog (Electron has no window.prompt). Resolves to the trimmed text, or null when cancelled.
+function askText({ title, quote = "", hint = "", value = "", placeholder = "", ok = L("保存", "Save"), required = false, line = false }) {
+  return new Promise(resolve => {
+    const back = document.activeElement;
+    const m = document.createElement("div");
+    m.className = "modal";
+    m.innerHTML = `<form>
+      <h3>${esc(title)}</h3>
+      ${quote ? `<div class="quote">${esc(quote)}</div>` : ""}
+      ${line ? `<input type="text" name="text">` : `<textarea name="text"></textarea>`}
+      ${hint ? `<div class="hint">${esc(hint)}</div>` : ""}
+      <div class="row2">${line ? "" : `<span class="keys">${/Mac/.test(navigator.platform) ? "⌘ ↩" : "Ctrl + Enter"}</span>`}<button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${esc(ok)}</button></div>
+    </form>`;
+    document.body.appendChild(m);
+    const f = m.querySelector("form"), text = f.elements.text, submit = f.querySelector("[type=submit]");
+    text.value = value;
+    text.placeholder = placeholder;
+    const check = () => { submit.disabled = required && !text.value.trim(); };
+    check();
+    const close = result => { document.removeEventListener("keydown", onKey, true); m.remove(); if (back?.isConnected) back.focus(); resolve(result); };
+    text.addEventListener("input", check);
+    // A stray click outside shouldn't throw away what was typed.
+    m.addEventListener("click", e => {
+      if (e.target.closest("[data-close]") || (e.target === m && text.value === value)) return close(null);
+      if (!e.target.closest("button, input, textarea")) text.focus();
+    });
+    // On the document, so the keys still work after a click moved focus off the field.
+    function onKey(e) {
+      const composing = e.isComposing || e.keyCode === 229;  // Enter or Esc here belongs to the input method
+      if (e.key === "Escape") { e.stopPropagation(); if (!composing) close(null); return; }
+      if (e.key !== "Enter") return;
+      if (composing) { if (line) e.preventDefault(); return; }
+      if (e.metaKey || e.ctrlKey) { e.preventDefault(); if (!submit.disabled) f.requestSubmit(); }
+    }
+    document.addEventListener("keydown", onKey, true);
+    f.addEventListener("submit", e => { e.preventDefault(); if (!submit.disabled) close(text.value.trim()); });
+    setTimeout(() => { text.focus(); text.setSelectionRange(text.value.length, text.value.length); }, 30);
+    makeRoom(m, 420);
+  });
 }
 
 function toast(msg) {
@@ -1016,8 +1067,10 @@ document.addEventListener("click", e => {
     if (kind === "open") return op("doc_open", { path });
     if (kind === "pin") return op("doc_meta", { path, pinned: !d.pinned });
     if (kind === "hide") return op("doc_meta", { path, hidden: !d.hidden });
-    if (kind === "tags") { const v = prompt(L("标签（用逗号分隔，留空清除）", "Tags (comma-separated, empty to clear)"), (d.tags || []).join(", ")); if (v !== null) op("doc_meta", { path, tags: v }); return; }
-    if (kind === "note") { const v = prompt(L("备注（留空清除）", "Note (empty to clear)"), d.note || ""); if (v !== null) op("doc_meta", { path, note: v }); return; }
+    if (kind === "tags") return askText({ title: L("标签", "Tags"), quote: path, hint: L("用逗号分隔，留空清除", "Comma-separated; empty to clear"), value: (d.tags || []).join(", "), line: true })
+      .then(v => { if (v !== null) op("doc_meta", { path, tags: v }); });
+    if (kind === "note") return askText({ title: L("备注", "Note"), quote: path, hint: L("留空清除", "Empty to clear"), value: d.note || "" })
+      .then(v => { if (v !== null) op("doc_meta", { path, note: v }); });
   }
   if (b.id === "theme") return toggleTheme();
   if (b.id === "newproj") return newProjectDialog();
@@ -1030,18 +1083,17 @@ document.addEventListener("click", e => {
   if (b.dataset.resolve) {
     const w = DATA.projects.find(p => p.id === state.project).status.waiting.find(x => x.id === b.dataset.resolve);
     const mode = b.dataset.mode;
-    let answer = L("已完成", "Done");
-    if (mode === "do") { if (!confirm(L(`确认已完成？\n${w.question}`, `Mark as done?\n${w.question}`))) return; }
-    else {
-      answer = prompt(mode === "decide" ? L(`记下你的决定：\n${w.question}`, `Your decision:\n${w.question}`) : L(`对方怎么答复的？\n${w.question}`, `What did they say?\n${w.question}`));
-      if (!answer) return;
-    }
-    if (API) return op("resolve_waiting", { id: w.id, answer }, false, async err => {
-      if (/^(核实没通过|Check failed)/.test(err) && confirm(L(`${err}\n\n确定已经做完了，仍然标记为完成？`, `${err}\n\nSure it's done? Mark it done anyway?`)))
-        return op("resolve_waiting", { id: w.id, answer, force: "1" });
-      toast(L("没有成功：", "Didn't work: ") + err);
-    });
-    copy(L(`请把 Forthmark 等待项 ${w.id}（${w.question}）标为已解决，答复：${answer}`, `Please mark Forthmark waiting item ${w.id} (${w.question}) as resolved, answer: ${answer}`), L("已复制，粘贴给你的 agent 即可", "Copied: paste it to your agent"));
+    const finish = answer => {
+      if (API) return op("resolve_waiting", { id: w.id, answer }, false, async err => {
+        if (/^(核实没通过|Check failed)/.test(err) && confirm(L(`${err}\n\n确定已经做完了，仍然标记为完成？`, `${err}\n\nSure it's done? Mark it done anyway?`)))
+          return op("resolve_waiting", { id: w.id, answer, force: "1" });
+        toast(L("没有成功：", "Didn't work: ") + err);
+      });
+      copy(L(`请把 Forthmark 等待项 ${w.id}（${w.question}）标为已解决，答复：${answer}`, `Please mark Forthmark waiting item ${w.id} (${w.question}) as resolved, answer: ${answer}`), L("已复制，粘贴给你的 agent 即可", "Copied: paste it to your agent"));
+    };
+    if (mode === "do") { if (confirm(L(`确认已完成？\n${w.question}`, `Mark as done?\n${w.question}`))) finish(L("已完成", "Done")); return; }
+    return askText({ title: mode === "decide" ? L("记下你的决定", "Your decision") : L("对方怎么答复的？", "What did they say?"), quote: w.question, required: true, ok: L("记下", "Record") })
+      .then(answer => { if (answer) finish(answer); });
   }
   if (b.dataset.task) {
     const P = curProject(), ids = b.dataset.to === "doing" ? (P.blocked[b.dataset.task] || []) : [];
@@ -1054,9 +1106,9 @@ document.addEventListener("click", e => {
   }
   if (b.dataset.pause) {
     const t = curProject().status.tasks.find(x => x.id === b.dataset.pause);
-    const note = prompt(L(`暂停「${t.title}」\n做到哪了、回来从哪继续？\n可以留空：你下次在会话里发消息时，agent 会根据上下文补写。`, `Pause "${t.title}"\nWhere did it stop, and where to pick up?\nCan be empty: the agent fills it in the next time you message the session.`), t.note || "");
-    if (note !== null) return op("pause_task", { id: t.id, note });
-    return;
+    return askText({ title: L("暂停任务", "Pause task"), quote: t.title, placeholder: L("做到哪了、回来从哪继续？", "Where did it stop, and where to pick up?"), value: t.note || "", ok: L("暂停", "Pause"),
+      hint: L("可以留空：你下次在会话里发消息时，agent 会根据上下文补写。", "Can be empty: the agent fills it in the next time you message the session.") })
+      .then(note => { if (note !== null) op("pause_task", { id: t.id, note }); });
   }
   if (b.dataset.resume) {
     if (API) return op("resume_task", { id: b.dataset.resume });
@@ -1073,7 +1125,8 @@ async function op(name, args, quiet, onError) {
     if (r.status === 403) { toast(L("服务刚刚更新，正在重新连接…", "The service was just updated, reconnecting…")); return setTimeout(() => location.reload(), 600); }
     const res = await r.json();
     if (!res.ok) return onError ? onError(res.error) : toast(L("没有成功：", "Didn't work: ") + res.error);
-    if (!quiet) toast(L("已记录 ✓ ", "Saved ✓ ") + res.text);
+    // A long echo of what was just typed adds nothing: it's already on the panel.
+    if (!quiet) toast(L("已记录 ✓", "Saved ✓") + (res.text.length <= 30 ? " " + res.text : ""));
     await refresh();
   } catch (e) { toast(L("连不上本地服务，请重新运行 forthmark.py open", "Can't reach the local service: run forthmark.py open again")); }
 }
