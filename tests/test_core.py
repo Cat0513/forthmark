@@ -225,7 +225,10 @@ class Service(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         r = cli("open", "--no-browser")
-        assert r.returncode == 0, r.stdout + r.stderr
+        if r.returncode != 0:
+            time.sleep(10)
+            log = (TMP / "data" / "server.log").read_text(encoding="utf-8", errors="replace")
+            raise AssertionError(f"{r.stdout}{r.stderr}\nafter 10s: {forthmark.server_url()}\nserver.log:\n{log}")
         cls.url = r.stdout.strip().splitlines()[-1]
         cls.info = json.loads((TMP / "data" / "server.json").read_text(encoding="utf-8"))
 
