@@ -1875,6 +1875,13 @@ def spawn_service():
 def cmd_serve(_directory):
     import http.server
     import secrets
+    import socketserver
+
+    class Server(http.server.ThreadingHTTPServer):
+        def server_bind(self):  # the stock one reverse-resolves 127.0.0.1, which can take over 30 s
+            socketserver.TCPServer.server_bind(self)
+            self.server_name, self.server_port = self.server_address[:2]
+
     for k in SESSION_ENV:  # a long-running service must not carry the session it was started from
         os.environ.pop(k, None)
     HOME.mkdir(parents=True, exist_ok=True)
@@ -1887,7 +1894,7 @@ def cmd_serve(_directory):
     server = None
     for port in range(DEFAULT_PORT, DEFAULT_PORT + 20):
         try:
-            server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
+            server = Server(("127.0.0.1", port), handler)
             break
         except OSError:
             continue
