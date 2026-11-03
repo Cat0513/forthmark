@@ -1216,12 +1216,13 @@ def launch_agent(path, command=None):
             return launch_windows(path, script, pick_terminal(cfg["terminal"]))
         except OSError as e:
             raise OpError(L("打不开终端：", "couldn't open the terminal: ") + str(e))
-    lines = ["#!/bin/zsh -l", f"unset {' '.join(SESSION_ENV)}", f"cd {shlex.quote(str(path))} || exit 1", command or agent]
+    # -i as well as -l: many people set PATH (and so reach the agent) only in .zshrc
+    lines = ["#!/bin/zsh -il", f"unset {' '.join(SESSION_ENV)}", f"cd {shlex.quote(str(path))} || exit 1", command or agent]
     script = launch_dir / f"{stamp}.command"
     script.write_text("\n".join(lines + ["exec zsh -l", ""]), encoding="utf-8")
     script.chmod(0o700)
     if pick_terminal(cfg["terminal"]) == "ghostty":
-        cmd = ["open", "-na", "Ghostty", "--args", "-e", "/bin/zsh", "-l", str(script)]
+        cmd = ["open", "-na", "Ghostty", "--args", "-e", "/bin/zsh", "-il", str(script)]
     else:
         cmd = ["open", "-a", "Terminal", str(script)]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=15, env=clean_env())
@@ -2039,8 +2040,7 @@ def cmd_setup(_directory):
         settings["statusLine"] = {"type": "command", "command": statusline_command()}
 
     rule_path = home_rule_path()
-    wanted_allow = [f"Read({rule_path})", f"Edit({rule_path})", f"Write({rule_path})",
-                    f"Bash({CLI}:*)"] + ([f"PowerShell({CLI} *)"] if IS_WINDOWS else [])
+    wanted_allow = [f"Read({rule_path})", f"Edit({rule_path})", f"Bash({CLI}:*)"] + ([f"PowerShell({CLI} *)"] if IS_WINDOWS else [])
     perms = settings.setdefault("permissions", {})
     # What we added last time goes first: the kit or the data dir may have moved since.
     perms["allow"] = [r for r in perms.get("allow", []) if r not in old_manifest.get("allow", [])]

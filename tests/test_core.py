@@ -131,6 +131,7 @@ class Setup(unittest.TestCase):
         if os.name == "nt":
             self.assertIn("args", ours[0])  # exec form: no shell involved
             self.assertTrue(any(a.startswith("PowerShell(") for a in s["permissions"]["allow"]))
+        self.assertFalse(any(a.startswith("Write(") for a in s["permissions"]["allow"]))  # Claude Code warns: Edit covers it
         self.assertEqual(cli("setup").returncode, 0)  # twice: no duplicates
         s = json.loads(self.settings.read_text(encoding="utf-8"))
         self.assertEqual(len([h for g in s["hooks"]["Stop"] for h in g["hooks"] if forthmark.ours(h)]), 1)
