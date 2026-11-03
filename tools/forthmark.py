@@ -1865,7 +1865,8 @@ def server_url():
 
 def spawn_service():
     """Start the local service in the background, independent of this process and its terminal."""
-    detach = ({"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP} if IS_WINDOWS
+    # Windows: a hidden console, not DETACHED_PROCESS. Without any console, every git it runs would open a window.
+    detach = ({"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP} if IS_WINDOWS
               else {"start_new_session": True})
     HOME.mkdir(parents=True, exist_ok=True)
     with open(HOME / "server.log", "a", encoding="utf-8") as log:

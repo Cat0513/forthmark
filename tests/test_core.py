@@ -250,6 +250,15 @@ class Service(unittest.TestCase):
         self.assertEqual(json.loads(self.get("api/ping").read())["home"], str(TMP / "data"))
         self.assertIn("Forthmark".encode(), self.get("").read())
 
+    @unittest.skipUnless(os.name == "nt", "Windows only")
+    def test_service_children_open_no_windows(self):
+        with mock.patch("subprocess.Popen") as popen:
+            forthmark.spawn_service()
+        self.assertTrue(popen.call_args.kwargs["creationflags"] & subprocess.CREATE_NO_WINDOW)
+        code = "import ctypes, subprocess, sys; sys.exit(0 if ctypes.windll.kernel32.GetConsoleWindow() else 3)"
+        r = subprocess.run([sys.executable, "-c", code], creationflags=subprocess.CREATE_NO_WINDOW, timeout=30)
+        self.assertEqual(r.returncode, 0)  # the console children would share exists, so they don't make their own
+
     def test_second_service_exits(self):
         r = subprocess.run(CLI + ["serve"], capture_output=True, encoding="utf-8", timeout=30)
         self.assertIn("already running", r.stdout)
