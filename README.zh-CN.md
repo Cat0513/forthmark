@@ -13,7 +13,7 @@
 
 完整介绍（总结、分点、设计理念、功能清单、不做什么、适合谁）：[docs/introduction.zh-CN.md](docs/introduction.zh-CN.md)
 
-> **早期预览（v0.1）**：支持 **macOS + Claude Code（命令行）**，中英文界面。Windows 预览版在计划中。详见文末「支持范围与限制」。
+> **早期预览（v0.1）**：支持 **macOS + Claude Code（命令行）**，中英文界面。Windows 预览版已可用（暂无托盘应用）。详见文末「支持范围与限制」。
 
 - 项目里的 md 照常给 agent 用；agent 额外维护一份**给人看的状态**（进度、下一步、等待项、bug、决策、时间线）。
 - **零侵入**：不往项目里写任何文件，不碰项目的 git（只读 `git status` / `git log`）。所有数据在 `~/.forthmark/`。
@@ -80,6 +80,20 @@ git clone https://github.com/Cat0513/forthmark.git && cd forthmark
 未接入的项目里，这几个 hook 查一下登记表就退出，不做任何事。
 
 单独装或卸载其中一部分：`python3 tools/forthmark.py setup` / `teardown`、`zsh tools/build_app.sh --install`。
+
+## 在 Windows 上安装（预览版）
+
+需要 Windows 10/11、Python 3.9+（从 [python.org](https://www.python.org/downloads/windows/) 安装，并勾选 Add python.exe to PATH）、Git 和 Claude Code。用普通 PowerShell 窗口即可，不需要管理员权限。
+
+```powershell
+git clone https://github.com/Cat0513/forthmark.git; cd forthmark
+powershell -ExecutionPolicy Bypass -File .\install.ps1                # hook + 状态栏 + /forthmark 命令
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoStatusline  # 不动 Claude Code 的状态栏
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall     # 全部撤销（~\.forthmark 里的状态数据保留）
+python tools\forthmark.py open                                        # 在浏览器里打开面板
+```
+
+预览版包含记录、hook、状态栏和浏览器面板，会话在 Windows Terminal 或 PowerShell 中打开。托盘应用和系统通知还没有。
 
 ## 菜单栏应用（推荐）
 
@@ -217,7 +231,7 @@ FORTHMARK_HOME=~/.forthmark-demo/data python3 tools/forthmark.py open
 | Claude 桌面版的 Code 标签 | ❓ 理论上共用 `~/.claude` 的 hook 配置，尚未验证 |
 | Codex CLI / Cursor 等 | ⚠️ 只能用「新建项目 / 打开会话」的快捷入口（命令可配置）；没有 hook，状态记录要等 MCP 入口 |
 | 终端 | Ghostty、macOS「终端」；其他终端以后再加 |
-| Windows | 🗓 计划中（核心记录 + hook + 浏览器面板 + 状态栏），v0.1 之后 |
+| Windows 10/11 | 🧪 预览版：核心记录、hook、状态栏和浏览器面板；托盘应用和通知之后提供 |
 | 语言 | 中文、英文，跟随 macOS 系统语言（config.json 的 `lang` 可以强制指定）；agent 记录的内容用你自己的语言 |
 | Linux | 核心部分大概率可用（hook、面板、状态栏），菜单栏应用和打开终端不支持，未测试 |
 

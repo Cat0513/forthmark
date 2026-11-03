@@ -13,7 +13,7 @@
 
 Full introduction (summary, design principles, features, non-goals, who it's for): [docs/introduction.md](docs/introduction.md)
 
-> **Early preview (v0.1):** **macOS + Claude Code (CLI)**, in English and Chinese. Windows preview is on the roadmap. See [Scope and limits](#scope-and-limits).
+> **Early preview (v0.1):** **macOS + Claude Code (CLI)**, in English and Chinese. A Windows preview is available (no tray app yet). See [Scope and limits](#scope-and-limits).
 
 - Your project's markdown stays the agent's working material; the agent additionally keeps a **status written for humans**: progress, next step, waiting items, bugs, decisions, timeline.
 - **Zero intrusion:** nothing is written into your projects and their git is only read (`git status` / `git log`). All data lives in `~/.forthmark/`.
@@ -76,6 +76,20 @@ Install backs up `~/.claude/settings.json` first, then adds:
 In untracked projects the hooks check the registry and exit without doing anything.
 
 To install or remove parts separately: `python3 tools/forthmark.py setup` / `teardown`, `zsh tools/build_app.sh --install`.
+
+## Install on Windows (preview)
+
+Requires Windows 10/11, Python 3.9+ ([python.org](https://www.python.org/downloads/windows/), with "Add python.exe to PATH" ticked), Git and Claude Code. Use a normal PowerShell window; administrator rights aren't needed.
+
+```powershell
+git clone https://github.com/Cat0513/forthmark.git; cd forthmark
+powershell -ExecutionPolicy Bypass -File .\install.ps1                # hooks + status line + /forthmark commands
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoStatusline  # leave Claude Code's status line alone
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall     # undo everything (status data in ~\.forthmark is kept)
+python tools\forthmark.py open                                        # open the panel in your browser
+```
+
+The preview covers recording, hooks, the status line and the browser panel, and opens sessions in Windows Terminal or PowerShell. There's no tray app or system notifications yet.
 
 ## Menu bar app (recommended)
 
@@ -215,7 +229,7 @@ Command-line agents (Claude Code, Codex CLI, …) are supported; GUI clients may
 | Codex CLI / Cursor etc. | ⚠️ Only the "new project / open session" shortcuts (commands are configurable); no hooks, so recording waits for the MCP entry point |
 | Terminals | Ghostty, macOS Terminal; more later |
 | Language | English and Chinese, following the macOS language (`lang` in config.json to override). What agents record is in your own language |
-| Windows | 🗓 Planned after v0.1 (core recording + hooks + browser panel + status line) |
+| Windows 10/11 | 🧪 Preview: core recording, hooks, status line and browser panel; tray app and notifications to come |
 | Linux | The core (hooks, panel, status line) likely works; no menu bar app or terminal launching; untested |
 
 Other limits:

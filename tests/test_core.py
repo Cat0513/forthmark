@@ -138,6 +138,19 @@ class Setup(unittest.TestCase):
         self.assertEqual(cli("teardown").returncode, 0)
         self.assertEqual(json.loads(self.settings.read_text(encoding="utf-8")), self.user)
 
+    @unittest.skipUnless(os.name == "nt", "Windows only")
+    def test_install_ps1(self):
+        run = lambda *a: subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(KIT / "install.ps1"), *a],
+                                        capture_output=True, encoding="utf-8", errors="replace", timeout=120)
+        r = run()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        s = json.loads(self.settings.read_text(encoding="utf-8"))
+        self.assertTrue(forthmark.ours(s["statusLine"]["command"]))
+        self.assertTrue(any(forthmark.ours(h) for g in s["hooks"]["Stop"] for h in g["hooks"]))
+        r = run("-Uninstall")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(json.loads(self.settings.read_text(encoding="utf-8")), self.user)
+
     def test_old_marker_and_user_hooks(self):
         self.assertTrue(forthmark.ours("FORTHMARK_HOOK=1 python3 x.py"))
         self.assertTrue(forthmark.ours({"command": "python.exe", "args": ["x.py", "--forthmark-hook"]}))
@@ -261,6 +274,17 @@ class Service(unittest.TestCase):
         shared = lambda flag: subprocess.run([sys.executable, "-c", parent], creationflags=flag, timeout=30).returncode
         self.assertGreaterEqual(shared(subprocess.CREATE_NO_WINDOW), 2)
         self.assertEqual(shared(subprocess.DETACHED_PROCESS), 1)  # the old way, the bug this guards against
+
+    @unittest.skipUnless(shutil.which("git"), "needs git")
+    def test_page_with_a_tracked_project(self):
+        repo = TMP / "面板 项目"
+        repo.mkdir(exist_ok=True)
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        (repo / "计划.md").write_text("# 计划", encoding="utf-8")
+        r = cli("add", str(repo))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.addCleanup(cli, "remove", str(repo))
+        self.assertIn("面板 项目", self.get("").read().decode("utf-8"))
 
     def test_second_service_exits(self):
         r = subprocess.run(CLI + ["serve"], capture_output=True, encoding="utf-8", timeout=30)

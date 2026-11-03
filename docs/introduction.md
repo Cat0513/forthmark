@@ -118,5 +118,5 @@ Early preview (v0.1):
 - Full support for **macOS + Claude Code (CLI)**; the Claude desktop app's Code tab should share the same settings but is not verified
 - Codex / Cursor etc. can use the "new project / open session" shortcuts (commands are configurable); recording waits for the MCP entry point
 - English and Chinese interface, following the macOS language
-- Windows: a preview after v0.1 (core recording, hooks, browser panel, status line)
+- Windows: a preview (core recording, hooks, browser panel, status line); tray app to come
 - Full scope: [README → Scope and limits](../README.md#scope-and-limits)

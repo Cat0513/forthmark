@@ -1784,7 +1784,14 @@ def make_handler(token):
             if not self.local_host():
                 return self.send(403, '{"error": "forbidden"}')
             if self.path in ("/", "/index.html") or self.path.startswith("/#"):
-                self.send(200, panel_page(panel_payload(), {"token": token}), "text/html; charset=utf-8")
+                try:
+                    page = panel_page(panel_payload(), {"token": token})
+                except Exception:  # say so: otherwise the browser only sees a dropped connection
+                    import traceback
+                    traceback.print_exc()
+                    return self.send(500, L(f"面板生成失败，详情见 {HOME / 'server.log'}", f"The panel failed to render, see {HOME / 'server.log'}"),
+                                     "text/plain; charset=utf-8")
+                self.send(200, page, "text/html; charset=utf-8")
             elif self.path.startswith("/vendor/"):
                 name = self.path[len("/vendor/"):]
                 ctypes = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
