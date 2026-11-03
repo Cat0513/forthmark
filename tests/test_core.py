@@ -255,9 +255,12 @@ class Service(unittest.TestCase):
         with mock.patch("subprocess.Popen") as popen:
             forthmark.spawn_service()
         self.assertTrue(popen.call_args.kwargs["creationflags"] & subprocess.CREATE_NO_WINDOW)
-        code = "import ctypes, subprocess, sys; sys.exit(0 if ctypes.windll.kernel32.GetConsoleWindow() else 3)"
-        r = subprocess.run([sys.executable, "-c", code], creationflags=subprocess.CREATE_NO_WINDOW, timeout=30)
-        self.assertEqual(r.returncode, 0)  # the console children would share exists, so they don't make their own
+        # A child reports how many processes share its console: 1 means it was given its own, which is a window.
+        child = "import ctypes, sys; b = (ctypes.c_uint * 8)(); sys.exit(ctypes.windll.kernel32.GetConsoleProcessList(b, 8))"
+        parent = f"import subprocess, sys; sys.exit(subprocess.run([sys.executable, '-c', {child!r}]).returncode)"
+        shared = lambda flag: subprocess.run([sys.executable, "-c", parent], creationflags=flag, timeout=30).returncode
+        self.assertGreaterEqual(shared(subprocess.CREATE_NO_WINDOW), 2)
+        self.assertEqual(shared(subprocess.DETACHED_PROCESS), 1)  # the old way, the bug this guards against
 
     def test_second_service_exits(self):
         r = subprocess.run(CLI + ["serve"], capture_output=True, encoding="utf-8", timeout=30)
