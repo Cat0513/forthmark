@@ -512,7 +512,7 @@ function render() {
       ${P.usage?.total ? `<span class="pulse cost" title="${L(`因本工具拦截而多出的轮次：${fmtTok(P.usage.overhead)} tokens（精确）\n+ 未计入：会话开始注入的规则与状态、agent 日常更新状态的少量开销\n本项目会话共 ${fmtTok(P.usage.total)} tokens（只算新增 token，不含缓存读取）`, `Extra turns caused by this tool: ${fmtTok(P.usage.overhead)} tokens (exact)\n+ not counted: rules and status injected at session start, the agent's routine status updates\nAll sessions in this project: ${fmtTok(P.usage.total)} tokens (new tokens only, no cache reads)`)}">
         <span class="faint">${L("工具开销", "tool overhead")}</span> <b>${fmtTok(P.usage.overhead)}+</b> <span class="faint">· ${(P.usage.overhead * 100 / P.usage.total).toFixed(1)}%</span></span>` : ""}
       ${!NATIVE ? `<button class="iconbtn" id="theme" title="${L("切换深浅色", "Toggle light / dark")}">◐</button>`
-        : SHELL === "popover" ? `<button class="iconbtn ghost" id="expand" title="${L("在窗口中打开（⌥ 点击菜单栏图标也可以）", "Open in a window (or ⌥-click the menu bar icon)")}">${EXPAND_ICON}</button>` : ""}</div>
+        : SHELL === "popover" ? `<button class="iconbtn ghost" id="expand" title="${/Mac/.test(navigator.platform) ? L("在窗口中打开（⌥ 点击菜单栏图标也可以）", "Open in a window (or ⌥-click the menu bar icon)") : L("在窗口中打开", "Open in a window")}">${EXPAND_ICON}</button>` : ""}</div>
     ${S.project.goal ? `<div class="goal">${esc(S.project.goal)}</div>` : ""}${chips}</div>`;
   const tabs = `<div class="tabs">${[["overview", L("总览", "Overview")], ["board", L("任务", "Tasks")], ["feed", L("动态", "Activity")], ["docs", L("文档", "Docs")]].map(([k, l]) =>
     `<button data-tab="${k}" class="${state.tab === k ? "on" : ""}">${l}</button>`).join("")}</div>`;

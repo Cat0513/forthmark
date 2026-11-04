@@ -1,0 +1,45 @@
+name: desktop
+on:
+  push:
+    branches: ["windows-*"]
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build, install, test, uninstall
+        shell: bash
+        working-directory: desktop
+        run: |
+          set -o pipefail
+          {
+            npm ci &&
+            npm test &&
+            npm run dist &&
+            ls -l dist/*.exe &&
+            ./dist/Forthmark-Setup-*.exe //S &&
+            for i in $(seq 60); do [ -f "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" ] && break; sleep 2; done &&
+            sleep 5 &&
+            taskkill //F //IM Forthmark.exe; # the installer starts the app; the tests start their own
+            sleep 2
+            node test/e2e.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" &&
+            node test/uninstall.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe"
+          } 2>&1 | tee ../desktop.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Forthmark-Setup
+          path: desktop/dist/Forthmark-Setup-*.exe
+          if-no-files-found: ignore
+      - if: failure()
+        shell: bash
+        run: |
+          python -c "
+          t = open('desktop.log', encoding='utf-8', errors='replace').read()[-3500:]
+          print('::error::' + t.replace('%', '%25').replace('\r', '').replace('\n', '%0A'))"

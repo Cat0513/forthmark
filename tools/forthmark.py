@@ -1809,7 +1809,7 @@ def make_handler(token):
                 except (OpError, KeyError) as e:
                     self.send(400, json.dumps({"error": str(e)}, ensure_ascii=False))
             elif self.path == "/api/ping":
-                self.send(200, json.dumps({"ok": True, "home": str(HOME)}))
+                self.send(200, json.dumps({"ok": True, "home": str(HOME), "kit": str(KIT)}))
             elif self.path in ("/api/badge", "/api/notify"):
                 if not self.authorized():
                     return self.send(403, '{"error": "forbidden"}')
@@ -2114,6 +2114,7 @@ def cmd_teardown(_directory):
     print("removed  /forthmark commands")
     if MANIFEST.exists():
         MANIFEST.unlink()
+    (HOME / "desktop-setup.json").unlink(missing_ok=True)  # reinstalling the desktop app connects again
     print(f"status data kept in {HOME}")
     return 0
 
