@@ -224,7 +224,7 @@ class Project(unittest.TestCase):
 
     def test_docs_use_forward_slashes(self):
         (self.path / "子目录" / "说明.md").write_text("# 说明", encoding="utf-8")
-        self.assertIn("子目录/说明.md", forthmark.list_doc_files(self.path))
+        self.assertIn("子目录/说明.md", forthmark.scan_doc_files(self.path)[0])
         self.assertIn("说明", str(forthmark.read_doc(self.pid, "子目录/说明.md")))
 
     def test_project_name_rules(self):
@@ -233,6 +233,23 @@ class Project(unittest.TestCase):
         if os.name == "nt":
             with self.assertRaises(forthmark.OpError):
                 forthmark.create_project('a:b')
+
+
+class SetupFailures(unittest.TestCase):
+    def test_corrupt_settings_are_left_alone(self):
+        d = TMP / "claude-bad"
+        d.mkdir(exist_ok=True)
+        (d / "settings.json").write_text("{ not json", encoding="utf-8")
+        r = subprocess.run(CLI + ["setup"], capture_output=True, encoding="utf-8", timeout=30, env={**os.environ, "FORTHMARK_CLAUDE_DIR": str(d)})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertEqual((d / "settings.json").read_text(encoding="utf-8"), "{ not json")
+
+    def test_a_panel_problem_is_not_a_failed_setup(self):
+        with mock.patch.object(forthmark, "render_panel", side_effect=RuntimeError("boom")), mock.patch("builtins.print"), mock.patch.object(sys, "argv", ["forthmark.py", "setup"]):
+            self.assertEqual(forthmark.cmd_setup("."), 0)
+        self.addCleanup(cli, "teardown")
+        self.assertTrue((TMP / "data" / "setup.json").exists())
 
 
 class UnreadableProjects(unittest.TestCase):
@@ -274,6 +291,110 @@ class UnreadableProjects(unittest.TestCase):
         with mock.patch.object(forthmark, "project_panel_data", broken), mock.patch("sys.stderr"):
             payload = forthmark.panel_payload()
         self.assertNotIn(self.repo.name, [Path(p.get("path", "")).name for p in payload["projects"]])
+
+
+class SystemDirs(unittest.TestCase):
+    def test_home_and_system_folders_are_not_projects(self):
+        self.assertTrue(forthmark.is_system_dir(Path.home()))
+        self.assertTrue(forthmark.is_system_dir(Path(os.environ["SystemRoot"]) / "System32" if forthmark.IS_WINDOWS else "/usr"))
+        self.assertFalse(forthmark.is_system_dir(TMP / "项目"))
+        r = cli("add", str(Path.home()))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn(str(Path.home()), [e["path"] for e in forthmark.load_registry()["projects"].values()])
+
+    def test_one_already_tracked_shows_up_flagged_and_unscanned(self):
+        repo = TMP / "老数据"
+        repo.mkdir(exist_ok=True)
+        r = cli("add", str(repo))
+        self.addCleanup(cli, "remove", str(repo))
+        pid = next(p for p, e in forthmark.load_registry()["projects"].items() if Path(e["path"]).name == repo.name)
+        entry = forthmark.load_registry()["projects"][pid]
+        with mock.patch.object(forthmark, "is_system_dir", return_value=True), mock.patch.object(forthmark, "scan_doc_files") as scan:
+            data = forthmark.project_panel_data(pid, entry)
+        self.assertTrue(data["system_dir"])
+        scan.assert_not_called()
+
+
+class Scanning(unittest.TestCase):
+    def setUp(self):
+        self.repo = TMP / "大 项目"
+        self.repo.mkdir(exist_ok=True)
+        (self.repo / "说明.md").write_text("# 说明", encoding="utf-8")
+        cli("add", str(self.repo))
+        self.addCleanup(cli, "remove", str(self.repo))
+        self.pid = next(p for p, e in forthmark.load_registry()["projects"].items() if Path(e["path"]).name == self.repo.name)
+        self.entry = forthmark.load_registry()["projects"][self.pid]
+        forthmark.docs_index_path(self.pid).unlink(missing_ok=True)
+
+    def test_the_panel_never_waits_for_the_scan(self):
+        import threading
+        release = threading.Event()
+        self.addCleanup(release.set)
+        real = forthmark.scan_doc_files
+
+        def slow(*args, **kwargs):
+            release.wait(20)
+            return real(*args, **kwargs)
+
+        with mock.patch.object(forthmark, "scan_doc_files", slow), mock.patch.object(forthmark, "SCANNER", forthmark.DocScanner()) as scanner:
+            started = time.monotonic()
+            data = forthmark.project_panel_data(self.pid, self.entry)
+            self.assertLess(time.monotonic() - started, 5)
+            self.assertTrue(data["docs_scanning"])
+            self.assertEqual(scanner.state()["name"], self.entry["name"])
+            release.set()
+            for _ in range(100):
+                if forthmark.load_docs_index(self.pid):
+                    break
+                time.sleep(0.05)
+        self.assertIn("说明.md", forthmark.load_docs_index(self.pid)["files"])
+
+    def test_limits_stop_a_huge_folder(self):
+        with mock.patch.object(forthmark, "SCAN_MAX_FILES", 1):
+            (self.repo / "b.md").write_text("b", encoding="utf-8")
+            files, complete = forthmark.scan_doc_files(self.repo)
+        self.assertFalse(complete)
+        self.assertTrue(files)
+
+    def test_an_annotated_new_file_is_not_called_missing(self):
+        forthmark.save_docs_index(self.pid, [], True)
+        (self.repo / "新.md").write_text("# 新", encoding="utf-8")
+        forthmark.save_docs_meta(self.pid, {"新.md": {"role": "plan"}})
+        self.addCleanup(forthmark.docs_meta_path(self.pid).unlink, missing_ok=True)
+        docs, missing = forthmark.doc_entries(self.pid, self.entry, forthmark.load_status(self.pid))
+        self.assertEqual([d["path"] for d in docs], ["新.md"])
+        self.assertEqual(missing, [])
+
+    def test_works_without_git(self):
+        env = {**os.environ, "PATH": ""}
+        r = subprocess.run(CLI + ["docs", str(self.repo)], capture_output=True, encoding="utf-8", env=env, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("说明.md", r.stdout)
+
+
+class RealPermissions(unittest.TestCase):
+    def test_a_file_this_user_really_cannot_read(self):
+        repo = TMP / "真 受限"
+        repo.mkdir(exist_ok=True)
+        locked = repo / "锁.md"
+        locked.write_text("# 锁", encoding="utf-8")
+        if forthmark.IS_WINDOWS:
+            who = os.environ["USERNAME"]
+            subprocess.run(["icacls", str(locked), "/deny", f"{who}:(R)"], check=True, capture_output=True)
+            self.addCleanup(subprocess.run, ["icacls", str(locked), "/remove:d", who], capture_output=True)
+        else:
+            locked.chmod(0)
+            self.addCleanup(locked.chmod, 0o600)
+        try:
+            locked.read_text(encoding="utf-8")
+            self.skipTest("this user can read everything (root)")
+        except OSError:
+            pass
+        cli("add", str(repo))
+        self.addCleanup(cli, "remove", str(repo))
+        pid = next(p for p, e in forthmark.load_registry()["projects"].items() if Path(e["path"]).name == repo.name)
+        docs, _ = forthmark.doc_entries(pid, forthmark.load_registry()["projects"][pid], forthmark.load_status(pid))
+        self.assertIn("锁.md", [d["path"] for d in docs])
 
 
 class Service(unittest.TestCase):
@@ -326,6 +447,19 @@ class Service(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.addCleanup(cli, "remove", str(repo))
         self.assertIn("面板 项目", self.get("").read().decode("utf-8"))
+
+    def test_stop_tracking_from_the_panel_keeps_the_data(self):
+        repo = TMP / "停止 跟踪"
+        repo.mkdir(exist_ok=True)
+        cli("add", str(repo))
+        self.addCleanup(cli, "remove", str(repo))
+        pid = next(p for p, e in forthmark.load_registry()["projects"].items() if Path(e["path"]).name == repo.name)
+        req = urllib.request.Request(self.url + "api/op", data=json.dumps({"op": "untrack_project", "project": pid}).encode(),
+                                     headers={"Content-Type": "application/json", "X-Forthmark-Token": self.info["token"]}, method="POST")
+        self.assertTrue(json.loads(urllib.request.urlopen(req, timeout=10).read())["ok"])
+        self.assertNotIn(pid, forthmark.load_registry()["projects"])
+        self.assertTrue(forthmark.status_path(pid).exists())
+        self.assertTrue(repo.is_dir())
 
     def test_second_service_exits(self):
         r = subprocess.run(CLI + ["serve"], capture_output=True, encoding="utf-8", timeout=30)

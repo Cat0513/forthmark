@@ -345,7 +345,9 @@ async function start() {
   } catch (e) {
     logFailure(e);
     // Not the blocking error box: the panel should still come up behind it.
-    dialog.showMessageBox({ type: "error", title: "Forthmark", message: L("Forthmark 没有接入 Claude Code", "Forthmark couldn't connect to Claude Code"), detail: e.message });
+    const reason = e.message.trim().split("\n").pop();  // python's own last line; the whole traceback goes to the log
+    dialog.showMessageBox({ type: "error", title: "Forthmark", message: L("Forthmark 没能接入 Claude Code", "Forthmark couldn't connect to Claude Code"),
+      detail: `${reason}\n\n${L("详情见", "Details in")} ${path.join(HOME, "desktop.log")}` });
   }
   try {
     await ensureServer();

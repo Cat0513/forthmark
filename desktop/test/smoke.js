@@ -8,7 +8,7 @@ const path = require("path");
 
 const exe = process.argv[2], resources = path.join(path.dirname(exe), "resources");
 const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "fm-smoke-"));
-const home = path.join(sandbox, "home"), claude = path.join(sandbox, "claude"), project = path.join(sandbox, "项目 demo");
+const home = path.join(sandbox, "数据 目录"), claude = path.join(sandbox, "claude"), project = path.join(sandbox, "项目 demo");
 const report = path.join(sandbox, "report.json");
 for (const d of [home, claude, project]) fs.mkdirSync(d);
 const env = { ...process.env, FORTHMARK_HOME: home, FORTHMARK_CLAUDE_DIR: claude, FORTHMARK_TEST_REPORT: report };
@@ -21,6 +21,13 @@ async function until(what, check, ms = 60000) {
 }
 
 (async () => {
+  // A service left over from a command line install: the app must replace it, not talk to it.
+  const leftover = path.resolve(__dirname, "..", "..", "tools", "forthmark.py");
+  execFileSync("python", [leftover, "open", "--no-browser"], { env });
+  const old = JSON.parse(fs.readFileSync(path.join(home, "server.json"), "utf8"));
+  assert.ok(!(await (await fetch(`http://127.0.0.1:${old.port}/api/ping`)).json()).kit.toLowerCase().includes("programs"));
+  step("started from a leftover command line service");
+
   const app = spawn(exe, [], { env, stdio: "ignore" });
   let exited = false;
   app.on("exit", () => { exited = true; });

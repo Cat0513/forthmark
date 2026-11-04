@@ -158,11 +158,30 @@ def git_root(path):
         return None
 
 
+def is_system_dir(path):
+    """A place that isn't a project, e.g. where an administrator window starts: C:\\Windows\\System32."""
+    p = os.path.normcase(os.path.abspath(str(path)))
+    if p == os.path.normcase(str(Path.home())):
+        return True
+    if not IS_WINDOWS:
+        return p in ("/", "/System", "/Library", "/Applications", "/Users", "/home", "/usr", "/bin", "/sbin", "/etc", "/var", "/opt", "/private")
+    if p == os.path.normcase(Path(p).anchor):
+        return True
+    for var in ("SystemRoot", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "ProgramData"):
+        v = os.environ.get(var)
+        if v and (p == os.path.normcase(v) or p.startswith(os.path.normcase(v).rstrip(os.sep) + os.sep)):
+            return True
+    return False
+
+
 def register_project(path):
     """Track a directory (nothing is written into it). Returns (pid, newly_created)."""
     found = find_project(path)
     if found:
         return found[0], False
+    if is_system_dir(path):
+        raise OpError(L(f"{path} 是系统目录或用户主目录，不能作为项目。请先切换到项目文件夹再接入。",
+                        f"{path} is a system or home folder, not a project. Switch to the project's folder first."))
     pid = project_id(path)
     reg = load_registry()
     reg["projects"][pid] = {"path": str(path), "name": path.name, "added_at": now_iso()}
@@ -182,7 +201,10 @@ def cmd_add(directory):
     if root and root != path and "--here" not in sys.argv:
         print(f"using the repository root {root} (pass --here to track {path} itself)")
         path = root
-    pid, created = register_project(path)
+    try:
+        pid, created = register_project(path)
+    except OpError as e:
+        sys.exit(str(e))
     print(f"tracking {path}" if created else f"already tracked: {load_registry()['projects'][pid]['path']}")
     print(f"status   {status_path(pid)}")
     print("nothing was written into the project.\n")
@@ -190,11 +212,16 @@ def cmd_add(directory):
     return 0
 
 
-def cmd_remove(directory):
-    pid, entry = require_project(directory)
+def untrack_project(pid):
+    """Stop tracking: the project's files and its status data are both kept."""
     reg = load_registry()
     del reg["projects"][pid]
     save_registry(reg)
+
+
+def cmd_remove(directory):
+    pid, entry = require_project(directory)
+    untrack_project(pid)
     print(f"stopped tracking {entry['path']}\nstatus data kept in {data_dir(pid)}")
     render_panel()
     return 0
@@ -813,9 +840,13 @@ def project_panel_data(pid, entry):
     if roots:
         starts += git_out(project_path, "log", "-1", "--format=%ad", "--date=short", roots[-1])
     docs, missing = doc_entries(pid, entry, status)
+    _, docs_complete, docs_scanning = known_doc_files(pid, entry)
     return {
         "id": pid,
         "path": entry["path"],
+        "system_dir": is_system_dir(project_path),
+        "docs_complete": docs_complete,
+        "docs_scanning": docs_scanning,
         "since": min(starts) if starts else None,
         "lifetime": lifetime_activity(project_path, status, min(starts) if starts else None),
         "docs": docs,
@@ -926,21 +957,123 @@ def save_docs_meta(pid, meta):
     replace_file(tmp, docs_meta_path(pid))
 
 
-def list_doc_files(project_path):
-    """Relative paths of docs/scripts: git-tracked plus untracked-but-not-ignored, else a pruned walk."""
+SCAN_MAX_FILES = 50_000
+SCAN_MAX_SECONDS = 20
+INLINE_SCAN_SECONDS = 2  # a hook or CLI call with nothing cached: never make the agent wait
+
+
+def scan_doc_files(project_path, progress=None, seconds=SCAN_MAX_SECONDS):
+    """Relative paths of docs/scripts: git-tracked plus untracked-but-not-ignored, else a pruned walk.
+    Returns (paths, complete); a very large folder gets what was found within the limits."""
+    complete = True
     try:
         rels = subprocess.run(["git", "ls-files", "-co", "--exclude-standard", "-z"], cwd=project_path,
-                              capture_output=True, encoding="utf-8", errors="replace", timeout=10, check=True).stdout.split("\0")
+                              capture_output=True, encoding="utf-8", errors="replace", timeout=min(10, seconds), check=True).stdout.split("\0")
     except (subprocess.SubprocessError, OSError):
         rels = None
     if not rels or rels == [""]:
-        rels = []
+        rels, checked, deadline = [], 0, time.monotonic() + seconds
         for root, dirs, names in os.walk(project_path):
             dirs[:] = [d for d in dirs if d not in DOC_SKIP_DIRS and not d.startswith(".")]
             rels += [os.path.relpath(os.path.join(root, n), project_path).replace(os.sep, "/") for n in names]
-    out = [r for r in rels if r and Path(r).suffix.lower() in DOC_EXTS
-           and not any(part in DOC_SKIP_DIRS for part in Path(r).parts[:-1])]
-    return sorted(set(out))[:DOC_LIMIT]
+            checked += len(names)
+            if progress:
+                progress(checked)
+            if checked >= SCAN_MAX_FILES or time.monotonic() > deadline:
+                complete = False
+                break
+    out = sorted({r for r in rels if r and Path(r).suffix.lower() in DOC_EXTS
+                  and not any(part in DOC_SKIP_DIRS for part in Path(r).parts[:-1])})
+    return out[:DOC_LIMIT], complete and len(out) <= DOC_LIMIT
+
+
+def docs_index_path(pid):
+    return data_dir(pid) / "docs-index.json"
+
+
+def save_docs_index(pid, files, complete):
+    tmp = docs_index_path(pid).with_suffix(".json.tmp")
+    write_json(tmp, {"files": files, "complete": complete})
+    replace_file(tmp, docs_index_path(pid))
+
+
+def load_docs_index(pid):
+    try:
+        return json.loads(docs_index_path(pid).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+class DocScanner:
+    """The service's background thread: looks through project folders so that no page load, agent hook
+    or button click ever waits for a big folder. On demand only (while a panel asks), nothing when idle."""
+
+    def __init__(self):
+        import threading
+        self.cond = threading.Condition()
+        self.wanted = {}  # pid -> entry
+        self.finished = {}  # pid -> (when, how long it took)
+        self.current = None
+        threading.Thread(target=self.run, daemon=True).start()
+
+    def request(self, pid, entry):
+        when, took = self.finished.get(pid, (0, 0))
+        if time.monotonic() - when < max(10, took * 20):  # a slow folder gets looked at less often
+            return
+        with self.cond:
+            if pid not in self.wanted and not (self.current and self.current["pid"] == pid):
+                self.wanted[pid] = entry
+                self.cond.notify()
+
+    def state(self):
+        """What the panel's status line shows, or None."""
+        with self.cond:
+            if self.current:
+                return {"name": self.current["name"], "checked": self.current["checked"], "queued": len(self.wanted)}
+            if self.wanted:
+                return {"name": next(iter(self.wanted.values()))["name"], "checked": 0, "queued": len(self.wanted) - 1}
+        return None
+
+    def run(self):
+        while True:
+            with self.cond:
+                while not self.wanted:
+                    self.cond.wait()
+                pid = next(iter(self.wanted))
+                entry = self.wanted.pop(pid)
+                self.current = {"pid": pid, "name": entry["name"], "checked": 0}
+            started = time.monotonic()
+            try:
+                files, complete = scan_doc_files(Path(entry["path"]), lambda n: self.current.update(checked=n))
+                if data_dir(pid).is_dir():
+                    save_docs_index(pid, files, complete)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+            self.finished[pid] = (time.monotonic(), time.monotonic() - started)
+            with self.cond:
+                self.current = None
+
+
+SCANNER = None  # set in the service; hooks and CLI calls only read what it found
+
+
+def known_doc_files(pid, entry):
+    """(paths, complete, scanning) from the last scan. Never waits for a big folder."""
+    project_path = Path(entry["path"])
+    if is_system_dir(project_path):
+        return [], True, False
+    index = load_docs_index(pid)
+    if SCANNER:
+        SCANNER.request(pid, entry)
+    if index:
+        return index["files"], index["complete"], False
+    if SCANNER:
+        return [], True, True
+    files, complete = scan_doc_files(project_path, seconds=INLINE_SCAN_SECONDS)
+    if complete:
+        save_docs_index(pid, files, complete)
+    return files, complete, False
 
 
 def doc_entries(pid, entry, status):
@@ -953,7 +1086,9 @@ def doc_entries(pid, entry, status):
                 refs.setdefault(item["ref"].split("#")[0], []).append(item["id"])
     status_time = parse_datetime(status["updated_at"]).timestamp()
     docs = []
-    for rel in list_doc_files(project_path):
+    files, _, _ = known_doc_files(pid, entry)
+    # Annotated files count even when the last scan predates them, or they'd show up as missing.
+    for rel in sorted({*files, *(k for k in meta if (project_path / k).is_file())}):
         full = project_path / rel
         try:
             st = full.stat()
@@ -1046,6 +1181,8 @@ def cmd_doc(_directory):
 
 def cmd_docs(directory):
     pid, entry = require_project(directory)
+    if not is_system_dir(entry["path"]):
+        save_docs_index(pid, *scan_doc_files(Path(entry["path"])))  # asked for by name: worth the wait
     docs, missing = doc_entries(pid, entry, full_status(pid))
     for d in docs:
         mark = "★" if d.get("source") else " "
@@ -1741,7 +1878,7 @@ def panel_payload():
                 traceback.print_exc()
     projects.sort(key=lambda p: p["last_activity"], reverse=True)
     cfg = load_config()
-    return {"generated_at": now_iso(), "projects": projects, "lang": ui_lang(),
+    return {"generated_at": now_iso(), "projects": projects, "lang": ui_lang(), "scan": SCANNER.state() if SCANNER else None,
             "config": {"projects_dir": os.path.expanduser(cfg["projects_dir"]), "terminal": cfg["terminal"],
                        "agent": cfg["agent"].split()[0], "git_init": cfg["git_init"],
                        "terminal_name": {"ghostty": "Ghostty", "windows-terminal": "Windows Terminal", "powershell": "PowerShell"}.get(
@@ -1830,6 +1967,10 @@ def make_handler(token):
                         pass
                 shown = run_notifications(dry_run=True, mark=True)
                 self.send(200, json.dumps([{"title": t, "body": b} for t, b in shown], ensure_ascii=False))
+            elif self.path == "/api/scan":
+                if not self.authorized():
+                    return self.send(403, '{"error": "forbidden"}')
+                self.send(200, json.dumps(SCANNER.state() if SCANNER else None, ensure_ascii=False))
             elif self.path == "/api/state":
                 if not self.authorized():
                     return self.send(403, '{"error": "forbidden"}')
@@ -1849,6 +1990,10 @@ def make_handler(token):
                     pid = create_project(a.get("name", ""), a.get("dir", ""), a.get("goal", ""), a.get("adopt") in ("1", True))
                     render_panel()
                     return self.send(200, json.dumps({"ok": True, "text": L("已创建，agent 已在终端里打开，等你说第一句话", "Created; your agent is open in the terminal, waiting for your first message"), "project": pid}, ensure_ascii=False))
+                if req.get("op") == "untrack_project":
+                    untrack_project(req["project"])
+                    render_panel()
+                    return self.send(200, json.dumps({"ok": True, "text": L("已停止跟踪，项目文件和状态记录都保留", "No longer tracked; the project's files and status data are kept")}, ensure_ascii=False))
                 if req.get("op") == "open_session":
                     text = open_session(req["project"], req.get("args", {}).get("mode", ""))
                     return self.send(200, json.dumps({"ok": True, "text": text}, ensure_ascii=False))
@@ -1919,6 +2064,9 @@ def cmd_serve(_directory):
         sys.exit("no free port")
     write_json(SERVER_INFO, {"port": server.server_address[1], "pid": os.getpid(), "token": token})
     os.chmod(SERVER_INFO, 0o600)  # the token lets the menu bar app call the API; only this user can read it
+
+    global SCANNER
+    SCANNER = DocScanner()
 
     # Restart in place when the kit's code changes, so a long-running service never serves stale logic.
     import threading
@@ -2030,7 +2178,11 @@ def drop_our_hooks(settings):
 def cmd_setup(_directory):
     HOME.mkdir(parents=True, exist_ok=True)
     HOME.chmod(0o700)  # status can name clients and decisions; launch scripts carry the user's words
-    settings = json.loads(SETTINGS.read_text(encoding="utf-8")) if SETTINGS.exists() else {}
+    try:
+        settings = json.loads(SETTINGS.read_text(encoding="utf-8")) if SETTINGS.exists() else {}
+    except ValueError as e:
+        sys.exit(L(f"{SETTINGS} 不是有效的 JSON（{e}）。请先修好这个文件；Forthmark 没有改动它。",
+                   f"{SETTINGS} isn't valid JSON ({e}). Please fix it first; Forthmark didn't change it."))
     old_manifest = json.loads(MANIFEST.read_text(encoding="utf-8")) if MANIFEST.exists() else {}
     if SETTINGS.exists():
         backup = SETTINGS.with_name(f"settings.json.bak-forthmark-{datetime.now():%Y%m%d%H%M%S}")
@@ -2089,8 +2241,11 @@ def cmd_setup(_directory):
         "additionalDirectories": sorted(added_dirs),
         "commands": list(COMMANDS),
     })
-    render_panel()
-    print(f"panel    {PANEL}")
+    try:  # connected either way: a panel problem shows up when the panel opens, not as a failed setup
+        render_panel()
+        print(f"panel    {PANEL}")
+    except Exception as e:
+        print(f"panel    couldn't be rendered yet: {e}")
     print("\ndone. in any project, open Claude Code and type /forthmark-add")
     return 0
 
