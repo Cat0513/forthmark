@@ -360,7 +360,8 @@ async function start() {
 
   if (process.env.FORTHMARK_TEST_REPORT) {  // for test/smoke.js, which runs the packaged app with nothing attached
     const bridge = popover.webContents.executeJavaScript("Boolean(window.webkit?.messageHandlers?.forthmark) && Boolean(document.querySelector('#app'))");
-    const report = { url: popover.webContents.getURL(), bridge: await Promise.race([bridge, new Promise(r => setTimeout(r, 15000, false))]) };
+    const loaded = await Promise.race([bridge, new Promise(r => setTimeout(r, 15000, false))]);  // the URL is empty until it commits
+    const report = { url: popover.webContents.getURL(), bridge: loaded };
     fs.writeFileSync(process.env.FORTHMARK_TEST_REPORT, JSON.stringify(report));
   }
   if (process.env.FORTHMARK_TEST) {  // for test/e2e.js: what only a real tray click could reach
