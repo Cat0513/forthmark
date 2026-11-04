@@ -16,7 +16,8 @@ const step = name => console.log(`ok - ${name}`);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(what, check, ms = 60000) {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(300)) if (await check()) return;
-  throw new Error(`timed out: ${what}; server.log: ${fs.existsSync(path.join(home, "server.log")) ? fs.readFileSync(path.join(home, "server.log"), "utf8").slice(-800) : "none"}`);
+  const tail = name => (fs.existsSync(path.join(home, name)) ? fs.readFileSync(path.join(home, name), "utf8").slice(-1200) : "none");
+  throw new Error(`timed out: ${what}\ndesktop.log: ${tail("desktop.log")}\nserver.log: ${tail("server.log")}`);
 }
 
 (async () => {

@@ -30,3 +30,15 @@ test("a count adds a red badge with a white digit; no count, no red", () => {
     assert.notDeepStrictEqual(paint(size, 1, true), paint(size, 8, true));
   }
 });
+
+test("every local module the app requires is in the package's file list", () => {
+  const fs = require("node:fs"), path = require("node:path");
+  const root = path.join(__dirname, "..");
+  const files = require("../package.json").build.files;
+  for (const file of files) {
+    for (const [, dep] of fs.readFileSync(path.join(root, file), "utf8").matchAll(/require\("\.\/([^"]+)"\)/g)) {
+      assert.ok(files.includes(`${dep}.js`), `${file} requires ${dep}, which wouldn't be packaged`);
+    }
+  }
+  assert.ok(files.includes(require("../package.json").main));
+});

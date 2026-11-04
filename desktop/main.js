@@ -24,6 +24,14 @@ const HOME = process.env.FORTHMARK_HOME ? path.resolve(process.env.FORTHMARK_HOM
   : path.join(os.homedir(), ".forthmark");
 const SETUP_MARK = path.join(HOME, "desktop-setup.json");
 
+function logFailure(e) {
+  console.error(e);
+  try {
+    fs.mkdirSync(HOME, { recursive: true });
+    fs.appendFileSync(path.join(HOME, "desktop.log"), `${new Date().toISOString()} ${e?.stack || e}\n`);
+  } catch {}
+}
+
 let tray, popover, panelWindow;
 let serviceStartedHere = false;
 let starting = null;
@@ -126,7 +134,7 @@ async function refreshBadge() {
 }
 
 function serviceFailed(e) {
-  console.error(e);
+  logFailure(e);
   setBadge(0, true, L(`本地服务没有启动，见 ${HOME}\\server.log`, `The local service didn't start, see ${HOME}\\server.log`));
 }
 
@@ -305,6 +313,9 @@ function testNotification() {
 
 // ---------------------------------------------------------------- lifecycle
 
+process.on("uncaughtException", logFailure);
+process.on("unhandledRejection", logFailure);
+
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.setAppUserModelId(APP_ID);  // Windows attributes notifications through this id
@@ -332,8 +343,9 @@ async function start() {
   try {
     await ensureSetup();
   } catch (e) {
-    console.error(e);
-    dialog.showErrorBox(L("Forthmark 没有接入 Claude Code", "Forthmark couldn't connect to Claude Code"), e.message);
+    logFailure(e);
+    // Not the blocking error box: the panel should still come up behind it.
+    dialog.showMessageBox({ type: "error", title: "Forthmark", message: L("Forthmark 没有接入 Claude Code", "Forthmark couldn't connect to Claude Code"), detail: e.message });
   }
   try {
     await ensureServer();

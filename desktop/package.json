@@ -18,11 +18,7 @@
     "directories": {
       "output": "dist"
     },
-    "files": [
-      "main.js",
-      "preload.js",
-      "trayicon.js"
-    ],
+    "files": ["main.js", "preload.js", "trayicon.js", "trayicon-paint.js"],
     "extraResources": [
       {
         "from": "python-runtime",
