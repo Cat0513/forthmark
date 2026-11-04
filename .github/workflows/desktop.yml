@@ -14,6 +14,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
       - name: Build, install, test, uninstall
         shell: bash
         working-directory: desktop
@@ -27,7 +30,8 @@ jobs:
             ./dist/Forthmark-Setup-*.exe //S &&
             for i in $(seq 60); do [ -f "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" ] && break; sleep 2; done &&
             sleep 5 &&
-            node test/e2e.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" &&
+            node test/e2e.js &&
+            node test/smoke.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" &&
             node test/uninstall.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe"
           } 2>&1 | tee ../desktop.log
       - uses: actions/upload-artifact@v4

@@ -1,18 +1,14 @@
-// Drives the real app against a sandbox (never the real ~/.forthmark or ~/.claude).
-//   node test/e2e.js                     development run from this folder
-//   node test/e2e.js <path to Forthmark.exe>   the installed app
+// Drives the app's windows from this folder against a sandbox (never the real ~/.forthmark or ~/.claude).
+// test/smoke.js covers the installed app.
 const assert = require("node:assert");
-const { execFileSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { _electron: electron } = require("playwright-core");
 
-const exe = process.argv[2];
 const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "fm-e2e-"));
 const home = path.join(sandbox, "home"), claude = path.join(sandbox, "claude");
-const project = path.join(sandbox, "项目 demo");
-fs.mkdirSync(home); fs.mkdirSync(claude); fs.mkdirSync(project);
+fs.mkdirSync(home); fs.mkdirSync(claude);
 const env = { ...process.env, FORTHMARK_HOME: home, FORTHMARK_CLAUDE_DIR: claude, FORTHMARK_TEST: "1" };
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -28,23 +24,13 @@ async function until(what, check, ms = 30000) {
 const step = name => console.log(`ok - ${name}`);
 
 (async () => {
-  const app = await electron.launch(exe ? { executablePath: exe, env } : { args: [path.join(__dirname, "..")], env });
+  const app = await electron.launch({ args: [path.join(__dirname, "..")], env });
   try {
     await until("app ready", () => app.evaluate(() => Boolean(globalThis.forthmarkTest?.ready)), 60000);
     const settings = JSON.parse(fs.readFileSync(path.join(claude, "settings.json"), "utf8"));
     assert.ok(settings.hooks.SessionStart && settings.hooks.Stop && settings.hooks.UserPromptSubmit);
     const info = JSON.parse(fs.readFileSync(path.join(home, "server.json"), "utf8"));
     step("first launch connected Claude Code and started the service");
-
-    // A tracked project with a Chinese name, through the same python the hooks use.
-    const hook = settings.hooks.SessionStart[0].hooks[0];
-    if (exe) {
-      assert.ok(hook.command.includes(`resources${path.sep}python`), hook.command);
-      execFileSync(hook.command, [path.join(path.dirname(exe), "resources", "kit", "tools", "forthmark.py"), "add", project], { env });
-      const out = execFileSync(hook.command, hook.args, { env, cwd: project, input: JSON.stringify({ cwd: project, source: "startup", hook_event_name: "SessionStart" }) }).toString();
-      assert.ok(out.includes("Forthmark"), out.slice(0, 300));
-      step("bundled python runs the CLI and the SessionStart hook");
-    }
 
     const pop = await until("popover loaded", async () => app.windows().find(w => w.url().includes("shell=popover")));
     await pop.waitForSelector("#app", { state: "attached" });

@@ -309,7 +309,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.setAppUserModelId(APP_ID);  // Windows attributes notifications through this id
   // Opening the app again while it runs: new tray icons start hidden in Windows' overflow, so show a window.
-  app.on("second-instance", () => openPanelWindow());
+  app.on("second-instance", (_e, argv) => (argv.includes("--quit") ? app.quit() : openPanelWindow()));
   app.on("window-all-closed", () => {});  // lives in the tray
   app.on("before-quit", () => {
     app.isQuitting = true;
@@ -346,6 +346,11 @@ async function start() {
   setInterval(checkNotifications, 30 * 60 * 1000);
   setTimeout(checkNotifications, 60 * 1000);
 
+  if (process.env.FORTHMARK_TEST_REPORT) {  // for test/smoke.js, which runs the packaged app with nothing attached
+    const bridge = popover.webContents.executeJavaScript("Boolean(window.webkit?.messageHandlers?.forthmark) && Boolean(document.querySelector('#app'))");
+    const report = { url: popover.webContents.getURL(), bridge: await Promise.race([bridge, new Promise(r => setTimeout(r, 15000, false))]) };
+    fs.writeFileSync(process.env.FORTHMARK_TEST_REPORT, JSON.stringify(report));
+  }
   if (process.env.FORTHMARK_TEST) {  // for test/e2e.js: what only a real tray click could reach
     globalThis.forthmarkTest = { togglePopover, showPopover, openPanelWindow, popover: () => popover, panelWindow: () => panelWindow, post, ready: true };
   }
