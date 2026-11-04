@@ -1017,8 +1017,8 @@ class DocScanner:
         threading.Thread(target=self.run, daemon=True).start()
 
     def request(self, pid, entry):
-        when, took = self.finished.get(pid, (0, 0))
-        if time.monotonic() - when < max(10, took * 20):  # a slow folder gets looked at less often
+        last = self.finished.get(pid)
+        if last and time.monotonic() - last[0] < max(10, last[1] * 20):  # a slow folder gets looked at less often
             return
         with self.cond:
             if pid not in self.wanted and not (self.current and self.current["pid"] == pid):

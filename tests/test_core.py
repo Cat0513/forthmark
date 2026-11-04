@@ -349,6 +349,14 @@ class Scanning(unittest.TestCase):
                 time.sleep(0.05)
         self.assertIn("说明.md", forthmark.load_docs_index(self.pid)["files"])
 
+    def test_first_scan_runs_right_after_boot(self):
+        scanner = forthmark.DocScanner.__new__(forthmark.DocScanner)  # no thread: only whether it gets queued
+        import threading
+        scanner.cond, scanner.wanted, scanner.finished, scanner.current = threading.Condition(), {}, {}, None
+        with mock.patch("time.monotonic", return_value=1.0):  # the clock counts from boot
+            scanner.request(self.pid, self.entry)
+        self.assertIn(self.pid, scanner.wanted)
+
     def test_limits_stop_a_huge_folder(self):
         with mock.patch.object(forthmark, "SCAN_MAX_FILES", 1):
             (self.repo / "b.md").write_text("b", encoding="utf-8")
