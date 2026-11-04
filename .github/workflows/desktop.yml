@@ -27,8 +27,6 @@ jobs:
             ./dist/Forthmark-Setup-*.exe //S &&
             for i in $(seq 60); do [ -f "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" ] && break; sleep 2; done &&
             sleep 5 &&
-            taskkill //F //IM Forthmark.exe; # the installer starts the app; the tests start their own
-            sleep 2
             node test/e2e.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" &&
             node test/uninstall.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe"
           } 2>&1 | tee ../desktop.log
