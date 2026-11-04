@@ -235,6 +235,47 @@ class Project(unittest.TestCase):
                 forthmark.create_project('a:b')
 
 
+class UnreadableProjects(unittest.TestCase):
+    """A project can hold files this user may not read, e.g. Claude Code started in C:\\Windows\\System32."""
+
+    def setUp(self):
+        self.repo = TMP / "受限 项目"
+        self.repo.mkdir(exist_ok=True)
+        (self.repo / "可读.md").write_text("# 可读", encoding="utf-8")
+        (self.repo / "受限.md").write_text("# 受限", encoding="utf-8")
+        r = cli("add", str(self.repo))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.addCleanup(cli, "remove", str(self.repo))
+        self.pid = next(p for p, e in forthmark.load_registry()["projects"].items() if Path(e["path"]).name == self.repo.name)
+
+    def test_an_unreadable_file_is_listed_without_its_title(self):
+        real = Path.read_text
+
+        def denied(path, *args, **kwargs):
+            if path.name == "受限.md":
+                raise PermissionError(13, "Permission denied")
+            return real(path, *args, **kwargs)
+
+        entry = forthmark.load_registry()["projects"][self.pid]
+        with mock.patch.object(Path, "read_text", denied):
+            docs, _ = forthmark.doc_entries(self.pid, entry, forthmark.load_status(self.pid))
+        by_path = {d["path"]: d for d in docs}
+        self.assertEqual(by_path["可读.md"]["title"], "可读")
+        self.assertNotIn("title", by_path["受限.md"])
+
+    def test_one_broken_project_does_not_take_the_panel_down(self):
+        real = forthmark.project_panel_data
+
+        def broken(pid, entry):
+            if pid == self.pid:
+                raise RuntimeError("boom")
+            return real(pid, entry)
+
+        with mock.patch.object(forthmark, "project_panel_data", broken), mock.patch("sys.stderr"):
+            payload = forthmark.panel_payload()
+        self.assertNotIn(self.repo.name, [Path(p.get("path", "")).name for p in payload["projects"]])
+
+
 class Service(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

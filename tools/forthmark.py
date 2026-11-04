@@ -931,7 +931,7 @@ def list_doc_files(project_path):
     try:
         rels = subprocess.run(["git", "ls-files", "-co", "--exclude-standard", "-z"], cwd=project_path,
                               capture_output=True, encoding="utf-8", errors="replace", timeout=10, check=True).stdout.split("\0")
-    except (subprocess.SubprocessError, FileNotFoundError, NotADirectoryError):
+    except (subprocess.SubprocessError, OSError):
         rels = None
     if not rels or rels == [""]:
         rels = []
@@ -964,7 +964,10 @@ def doc_entries(pid, entry, status):
         doc = {"path": rel, "ext": ext, "size": st.st_size, "mtime": st.st_mtime,
                "script": ext in SCRIPT_EXTS, "refs": refs.get(rel, []), **m}
         if ext not in SCRIPT_EXTS and st.st_size <= 512_000:
-            text = full.read_text(encoding="utf-8", errors="replace")
+            try:
+                text = full.read_text(encoding="utf-8", errors="replace")
+            except OSError:  # e.g. a file only an administrator may read: list it, without its title
+                text = ""
             boxes = CHECK_RE.findall(text)
             if boxes:
                 doc["checks"] = {"done": sum(b != " " for b in boxes), "total": len(boxes)}
@@ -1730,7 +1733,12 @@ def panel_payload():
     projects = []
     for pid, entry in load_registry()["projects"].items():
         if not validate_project(pid)[0]:
-            projects.append(project_panel_data(pid, entry))
+            try:
+                projects.append(project_panel_data(pid, entry))
+            except Exception:  # one bad project must not take the whole panel down
+                import traceback
+                print(f"panel: skipped project {entry.get('path', pid)}", file=sys.stderr)
+                traceback.print_exc()
     projects.sort(key=lambda p: p["last_activity"], reverse=True)
     cfg = load_config()
     return {"generated_at": now_iso(), "projects": projects, "lang": ui_lang(),
