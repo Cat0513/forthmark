@@ -71,6 +71,7 @@
 .empty-start .faint { font-size: 12px; }
 .pathrow { display: flex; gap: 6px; }
 .pathrow input { flex: 1; min-width: 0; }
+.folderpick { display: inline-flex; align-items: center; justify-content: center; padding: 0 10px; }
 .scanbar { position: fixed; left: 8px; bottom: 6px; z-index: 40; max-width: calc(100vw - 16px); padding: 2px 8px; border-radius: 6px;
   font-size: 11px; color: var(--ink2); background: var(--card); border: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 .scanbar[hidden] { display: none; }
@@ -885,6 +886,17 @@ function fitPopover() {
 }
 document.addEventListener("toggle", fitPopover, true);  // <details> opened/closed
 
+// A typed path and the system's picker both work. In the Windows app the picker comes from the app, so the
+// popover stays open behind it; elsewhere from the local service.
+const folderButton = id => `<button type="button" class="act folderpick" id="${id}" title="${L("选择文件夹", "Choose a folder")}" aria-label="${L("选择文件夹", "Choose a folder")}">${FOLDER_ICON}</button>`;
+async function chooseFolder() {
+  if (window.forthmarkDialogs?.pickFolder) return window.forthmarkDialogs.pickFolder();
+  const res = await fetch("/api/op", { method: "POST", headers: { "Content-Type": "application/json", "X-Forthmark-Token": API.token },
+    body: JSON.stringify({ op: "pick_folder" }) }).then(r => r.json()).catch(e => ({ ok: false, error: String(e) }));
+  if (!res.ok) toast(L("没有打开：", "Didn't open: ") + res.error);
+  return res.path || null;
+}
+
 function newProjectDialog() {
   const base = (DATA.config?.projects_dir || "~/Documents").replace(/\/$/, "");
   const m = document.createElement("div");
@@ -892,7 +904,7 @@ function newProjectDialog() {
   m.innerHTML = `<form>
     <h3>${L("新建项目", "New project")}</h3>
     <label>${L("名字", "Name")}<input type="text" name="name" placeholder="${L("比如：健身打卡小工具", "e.g. habit-tracker")}" autofocus required></label>
-    <label>${L("位置", "Location")}<span class="pathrow"><input type="text" name="dir" value="${esc(base)}/">${window.forthmarkDialogs?.pickFolder ? `<button type="button" class="act" id="pickparent">${L("浏览…", "Browse…")}</button>` : ""}</span></label>
+    <label>${L("位置", "Location")}<span class="pathrow"><input type="text" name="dir" value="${esc(base)}/">${folderButton("pickparent")}</span></label>
     <label>${L("目标（可选，显示在面板上）", "Goal (optional, shown on the panel)")}<input type="text" name="goal" placeholder="${L("一句话说明要做成什么，比如：每天打卡、每周看到进步", "What it should become, in one line, e.g. log workouts daily, see progress weekly")}"></label>
     <div class="hint">${L(`会创建文件夹${DATA.config?.git_init ? "并 git init" : ""}、接入跟踪，然后在 ${esc(DATA.config?.terminal_name || "终端")} 里打开 ${esc(DATA.config?.agent || "claude")}，第一句话由你来说。`, `Creates the folder${DATA.config?.git_init ? " (git init)" : ""}, tracks it, then opens ${esc(DATA.config?.agent || "claude")} in ${esc(DATA.config?.terminal_name || "a terminal")}. You type the first message.`)}</div>
     <div class="row2"><button type="button" class="act" id="toadopt" style="margin-right:auto">${L("接入已有文件夹", "Track an existing folder")}</button><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("创建并打开", "Create and open")}</button></div>
@@ -906,7 +918,7 @@ function newProjectDialog() {
   m.addEventListener("click", e => {
     if (e.target === m || e.target.closest("[data-close]")) close();
     if (e.target.id === "toadopt") { close(); adoptProjectDialog(); }
-    if (e.target.id === "pickparent") window.forthmarkDialogs.pickFolder().then(chosen => {
+    if (e.target.closest("#pickparent")) chooseFolder().then(chosen => {
       if (!chosen) return;
       dir.value = `${chosen.replace(/[\\/]$/, "")}/${name.value.trim()}`;
       dirTouched = false;
@@ -933,7 +945,7 @@ function newProjectDialog() {
 const TERMINAL_NAMES = { "auto": () => L("自动", "Automatic"), "windows-terminal": () => "Windows Terminal", "powershell": () => "PowerShell", "ghostty": () => "Ghostty", "terminal": () => L("终端（Terminal）", "Terminal") };
 
 function settingsDialog() {
-  const c = DATA.config || {}, pick = window.forthmarkDialogs?.pickFolder, P = curProject();
+  const c = DATA.config || {}, P = curProject();
   const m = document.createElement("div");
   m.className = "modal settings";
   m.innerHTML = `<form>
@@ -945,7 +957,7 @@ function settingsDialog() {
       <option value="codex" ${c.agent_preset === "codex" ? "selected" : ""}>${L("Codex（暂不自动记录）", "Codex (no automatic recording yet)")}</option>
       ${c.agent_preset ? "" : `<option value="custom" selected>${L("自定义（配置文件）", "Custom (config file)")}</option>`}</select></label>
     <div class="hint" data-codex hidden>${L("Codex 目前只能从面板打开和恢复会话，项目状态不会自动更新。", "With Codex the panel can open and resume sessions, but project status isn't updated automatically yet.")}</div>
-    <label>${L("新建项目的默认位置", "Default location for new projects")}<span class="pathrow"><input type="text" name="projects_dir" value="${esc(c.projects_dir || "")}">${pick ? `<button type="button" class="act" id="pickdefault">${L("浏览…", "Browse…")}</button>` : ""}</span></label>
+    <label>${L("新建项目的默认位置", "Default location for new projects")}<span class="pathrow"><input type="text" name="projects_dir" value="${esc(c.projects_dir || "")}">${folderButton("pickdefault")}</span></label>
     ${P ? `<div class="hint">${L(`当前项目：${esc(P.status.project.name)}`, `This project: ${esc(P.status.project.name)}`)} <button type="button" class="linkbtn" data-untrack="1">${L("停止跟踪", "Stop tracking")}</button></div>` : ""}
     <div class="row2"><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("保存", "Save")}</button></div>
   </form>`;
@@ -956,8 +968,8 @@ function settingsDialog() {
   codexHint();
   m.addEventListener("click", async e => {
     if (e.target === m || e.target.closest("[data-close]")) return close();
-    if (e.target.id === "pickdefault") {
-      const chosen = await pick();
+    if (e.target.closest("#pickdefault")) {
+      const chosen = await chooseFolder();
       if (chosen) f.elements.projects_dir.value = chosen;
     }
   });
@@ -973,12 +985,11 @@ function settingsDialog() {
 }
 
 function adoptProjectDialog() {
-  const pick = window.forthmarkDialogs?.pickFolder;
   const m = document.createElement("div");
   m.className = "modal";
   m.innerHTML = `<form>
     <h3>${L("接入已有文件夹", "Track an existing folder")}</h3>
-    <label>${L("文件夹路径", "Folder path")}<span class="pathrow"><input type="text" name="dir" placeholder="${L("项目文件夹的完整路径", "Full path of the project folder")}" autofocus required>${pick ? `<button type="button" class="act" id="pickdir">${L("浏览…", "Browse…")}</button>` : ""}</span></label>
+    <label>${L("文件夹路径", "Folder path")}<span class="pathrow"><input type="text" name="dir" placeholder="${L("项目文件夹的完整路径", "Full path of the project folder")}" autofocus required>${folderButton("pickdir")}</span></label>
     <div class="hint">${L(`不会改动文件夹里的任何文件。接入后会在 ${esc(DATA.config?.terminal_name || "终端")} 里打开 ${esc(DATA.config?.agent || "claude")}，第一句话由你来说。`, `Nothing in the folder is changed. ${esc(DATA.config?.agent || "claude")} then opens in ${esc(DATA.config?.terminal_name || "a terminal")}; the first message is yours.`)}</div>
     <div class="row2"><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("接入并打开", "Track and open")}</button></div>
   </form>`;
@@ -986,8 +997,8 @@ function adoptProjectDialog() {
   const f = m.querySelector("form"), dir = f.elements.dir, close = () => m.remove();
   m.addEventListener("click", async e => {
     if (e.target === m || e.target.closest("[data-close]")) return close();
-    if (e.target.id === "pickdir") {
-      const chosen = await pick();
+    if (e.target.closest("#pickdir")) {
+      const chosen = await chooseFolder();
       if (chosen) dir.value = chosen;
     }
   });

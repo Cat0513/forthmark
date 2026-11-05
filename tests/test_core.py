@@ -311,6 +311,29 @@ class Settings(unittest.TestCase):
         opened.assert_not_called()
 
 
+class FolderPicker(unittest.TestCase):
+    def run_with(self, returncode, stdout):
+        result = subprocess.CompletedProcess([], returncode, stdout=stdout, stderr="")
+        with mock.patch("subprocess.run", return_value=result) as run:
+            return forthmark.pick_folder(), run
+
+    def test_returns_the_choice_without_a_trailing_separator(self):
+        chosen, run = self.run_with(0, "/Users/me/我的 项目/\n" if not forthmark.IS_WINDOWS else "C:\\我的 项目\\\r\n")
+        self.assertIn("我的 项目", chosen)
+        self.assertFalse(chosen.endswith(("/", "\\")))
+        self.assertEqual(run.call_args[0][0][0], "powershell" if forthmark.IS_WINDOWS else "osascript")
+
+    def test_cancel_is_not_an_error(self):
+        self.assertIsNone(self.run_with(1, "")[0])
+
+    @unittest.skipUnless(forthmark.IS_WINDOWS, "PowerShell")
+    def test_the_powershell_script_parses(self):
+        script = forthmark.WINDOWS_PICK_FOLDER % forthmark.powershell_quote("选择")
+        check = "$null = [scriptblock]::Create($input | Out-String); 'ok'"
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", check], input=script, capture_output=True, encoding="utf-8", timeout=60)
+        self.assertIn("ok", r.stdout, r.stderr)
+
+
 class SetupFailures(unittest.TestCase):
     def test_corrupt_settings_are_left_alone(self):
         d = TMP / "claude-bad"

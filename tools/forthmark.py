@@ -1267,6 +1267,32 @@ def save_settings(args):
     write_json(CONFIG_PATH, saved)
 
 
+MAC_PICK_FOLDER = """POSIX path of (choose folder with prompt {prompt})"""
+WINDOWS_PICK_FOLDER = """Add-Type -AssemblyName System.Windows.Forms
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$owner = New-Object System.Windows.Forms.Form -Property @{ TopMost = $true; ShowInTaskbar = $false; Opacity = 0 }
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{ Description = %s }
+if ($dialog.ShowDialog($owner) -eq 'OK') { Write-Output $dialog.SelectedPath }
+"""
+
+
+def pick_folder():
+    """The system's folder picker, for pages with no native bridge (the macOS app, a browser). None if cancelled."""
+    prompt = L("选择文件夹", "Choose a folder")
+    if IS_WINDOWS:
+        cmd = ["powershell", "-NoProfile", "-STA", "-Command", WINDOWS_PICK_FOLDER % powershell_quote(prompt)]
+    else:
+        cmd = ["osascript", "-e", MAC_PICK_FOLDER.format(prompt=json.dumps(prompt, ensure_ascii=False))]
+    try:
+        out = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=600)
+    except (subprocess.SubprocessError, OSError) as e:
+        raise OpError(L(f"无法打开文件夹选择框：{e}", f"Couldn't open the folder picker: {e}"))
+    chosen = out.stdout.strip()
+    if out.returncode or not chosen:  # cancelled
+        return None
+    return chosen.rstrip("/\\") or chosen
+
+
 def open_project_folder(pid):
     """Takes a project id, never a path: the panel can only open folders that are already tracked."""
     entry = load_registry()["projects"].get(pid)
@@ -2069,6 +2095,8 @@ def make_handler(token):
                 if req.get("op") == "save_settings":
                     save_settings(req.get("args", {}))
                     return self.send(200, json.dumps({"ok": True, "text": L("设置已保存", "Settings saved")}, ensure_ascii=False))
+                if req.get("op") == "pick_folder":
+                    return self.send(200, json.dumps({"ok": True, "path": pick_folder()}, ensure_ascii=False))
                 if req.get("op") == "open_folder":
                     open_project_folder(req["project"])
                     return self.send(200, json.dumps({"ok": True}))
