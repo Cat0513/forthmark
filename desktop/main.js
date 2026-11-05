@@ -142,6 +142,8 @@ function serviceFailed(e) {
 
 function buildMenu() {
   return Menu.buildFromTemplate([
+    { label: `Forthmark ${app.getVersion()}`, enabled: false },
+    { type: "separator" },
     ...updateMenuItems(),
     { label: L("打开面板窗口", "Open Panel Window"), click: () => openPanelWindow() },
     { label: L("在浏览器打开", "Open in Browser"), click: () => withServer(() => shell.openExternal(panelURL())) },
