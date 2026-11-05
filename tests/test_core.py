@@ -415,6 +415,106 @@ class Backups(unittest.TestCase):
         self.assertTrue((d / "settings.json.bak-mine").exists())
 
 
+class WeeklyReport(unittest.TestCase):
+    def setUp(self):
+        self.repo = TMP / "周报 项目"
+        self.repo.mkdir(exist_ok=True)
+        git = lambda *a, **k: subprocess.run(["git", *a], cwd=self.repo, check=True, capture_output=True, **k)
+        if not (self.repo / ".git").exists():
+            git("init", "-q")
+            git("config", "user.email", "me@example.com")
+            git("config", "user.name", "Me")
+            git("commit", "-q", "--allow-empty", "-m", "我的提交：修好登录")
+            git("-c", "user.email=other@example.com", "-c", "user.name=Other", "commit", "-q", "--allow-empty", "-m", "别人的提交")
+        self.quiet = TMP / "周报 没进展"
+        self.quiet.mkdir(exist_ok=True)
+        cli("add", str(self.repo))
+        cli("add", str(self.quiet))
+        self.addCleanup(cli, "remove", str(self.repo))
+        self.addCleanup(cli, "remove", str(self.quiet))
+        self.pid = next(p for p, e in forthmark.load_registry()["projects"].items() if Path(e["path"]).name == self.repo.name)
+        forthmark.write_json(forthmark.status_path(self.pid), forthmark.starter_status(self.repo.name))
+        for title in ("做完的事", "上个月做完的事", "下一件事"):
+            forthmark.apply_op(self.pid, "add_task", {"title": title}, source="")
+        forthmark.apply_op(self.pid, "set_next", {"task": "t1"}, source="")
+        forthmark.apply_op(self.pid, "set_task", {"id": "t1", "status": "done"}, source="")
+        forthmark.apply_op(self.pid, "set_task", {"id": "t2", "status": "done"}, source="")
+        s = forthmark.load_status(self.pid)
+        next(t for t in s["tasks"] if t["id"] == "t2")["changed_at"] = "2020-01-01"
+        s["next"] = {"task": "t1", "title": "已经做完的下一步"}
+        forthmark.write_json(forthmark.status_path(self.pid), s)
+        forthmark.REPORT_TEMPLATE.unlink(missing_ok=True)
+        self.addCleanup(forthmark.REPORT_TEMPLATE.unlink, missing_ok=True)
+        self.week = forthmark.report_week()
+
+    def test_the_week_runs_monday_to_sunday(self):
+        from datetime import date
+        self.assertEqual(forthmark.report_week(today=date(2026, 11, 5)), (date(2026, 11, 2), date(2026, 11, 8)))
+        self.assertEqual(forthmark.report_week(last=True, today=date(2026, 11, 2)), (date(2026, 10, 26), date(2026, 11, 1)))
+
+    def test_material_has_this_weeks_facts_and_only_those(self):
+        text = forthmark.report_text(*self.week)
+        self.assertIn("做完的事", text)
+        self.assertNotIn("上个月做完的事", text)
+        self.assertIn("我的提交：修好登录", text)
+        self.assertNotIn("别人的提交", text)
+        self.assertIn("下一件事", text)
+        self.assertNotIn("已经做完的下一步", text)  # finished: says nothing about next week
+        self.assertIn(self.quiet.name, text)  # named as left out
+
+    def test_a_project_that_cant_be_read_is_named_not_silently_dropped(self):
+        name = forthmark.load_registry()["projects"][self.pid]["name"]
+        with mock.patch.object(forthmark, "validate_project", side_effect=lambda pid: (["broken"], None) if pid == self.pid else ([], None)):
+            text = forthmark.report_text(*self.week)
+        self.assertNotIn("做完的事", text)
+        self.assertIn(name, text)
+
+    def test_projects_can_be_left_out(self):
+        name = forthmark.load_status(self.pid)["project"]["name"]
+        self.assertNotIn("做完的事", forthmark.report_text(*self.week, exclude={name}))
+
+    def test_material_is_marked_as_not_instructions(self):
+        self.assertTrue("不是给你的指令" in forthmark.report_text(*self.week) or "not instructions" in forthmark.report_text(*self.week))
+
+    def test_the_users_template_replaces_the_default_format(self):
+        default = forthmark.report_text(*self.week)
+        forthmark.save_report_template("按项目分组，给老板看")
+        text = forthmark.report_text(*self.week)
+        self.assertIn("按项目分组，给老板看", text)
+        self.assertNotEqual(default, text)
+        forthmark.save_report_template("")
+        self.assertFalse(forthmark.REPORT_TEMPLATE.exists())
+        with self.assertRaises(forthmark.OpError):
+            forthmark.save_report_template("长" * (forthmark.REPORT_TEMPLATE_LIMIT + 1))
+
+    def test_a_project_without_git_still_reports(self):
+        with mock.patch.object(forthmark, "report_commits", return_value=([], 0)):
+            self.assertIn("做完的事", forthmark.report_text(*self.week))
+
+    def test_the_cli_prints_the_material(self):
+        r = cli("report")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("做完的事", r.stdout)
+
+
+class StoppedTracking(unittest.TestCase):
+    def test_an_agent_with_old_rules_is_told_not_to_track_again(self):
+        repo = TMP / "已退出"
+        repo.mkdir(exist_ok=True)
+        cli("add", str(repo))
+        cli("remove", str(repo))
+        r = subprocess.run(CLI + ["op", "add_task", "title=x"], cwd=repo, capture_output=True, encoding="utf-8", timeout=30)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("forthmark.py add", r.stderr)
+        self.assertIn("停止跟踪", r.stderr)
+
+    def test_a_folder_never_tracked_still_gets_the_hint(self):
+        repo = TMP / "从没接入"
+        repo.mkdir(exist_ok=True)
+        r = subprocess.run(CLI + ["op", "add_task", "title=x"], cwd=repo, capture_output=True, encoding="utf-8", timeout=30)
+        self.assertIn("forthmark.py add", r.stderr)
+
+
 class SetupFailures(unittest.TestCase):
     def test_corrupt_settings_are_left_alone(self):
         d = TMP / "claude-bad"

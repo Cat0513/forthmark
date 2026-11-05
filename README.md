@@ -194,6 +194,10 @@ all reading and writing the same ~/.forthmark/projects/<project>/status.json
 | `assets/` | Logo and app icon sources (`tools/make_icon.sh` rebuilds the icon) |
 | `vendor/` | marked (MIT), DOMPurify (Apache-2.0 / MPL-2.0), github-markdown-css (MIT) for previews and morphdom (MIT) for in-place updates, with their licenses |
 
+## Weekly report
+
+Press **Report** on the panel (or type `/forthmark-report`). Forthmark gathers the week's finished tasks, fixed bugs, decisions, your own git commits and what's open, for every project with progress, and your agent condenses them into a draft you can keep revising by talking to it. Forthmark calls no model itself and doesn't read session transcripts; the material goes to whichever model your agent uses, so it first lists the projects and lets you leave some out. Set your own format under the gear in **Report template**, with an example or requirements, or tell your agent "use this format from now on". Reports are saved in `~/.forthmark/reports`.
+
 ## Configuration
 
 The gear in the panel sets the terminal, the agent (Claude Code or Codex) and where new projects go. Everything else lives in the file:

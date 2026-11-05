@@ -519,7 +519,7 @@ function render() {
   const chips = projects.length > 1 || API ? `<div class="projbar"><button class="pscroll" data-pscroll="-1" hidden></button><div class="projects">${projects.map(p => {
     const n = p.status.waiting.filter(w => w.status === "open").length;
     return `<button data-project="${esc(p.id)}" class="${p.id === P.id ? "on" : ""}"><span class="dot" style="--c:${pulseOf(p).c}"></span>${esc(p.status.project.name)}${n ? `<span class="n">${n}</span>` : ""}</button>`;
-  }).join("")}</div><button class="pscroll" data-pscroll="1" hidden></button>${API ? `<button class="addp" id="newproj" title="${L("新建项目：建文件夹、接入跟踪，并在终端里启动 agent", "New project: create a folder, track it, and start your agent in a terminal")}">＋</button>` : ""}</div>` : "";
+  }).join("")}</div><button class="pscroll" data-pscroll="1" hidden></button>${API ? `<button class="addp" id="newproj" title="${L("新建项目：建文件夹、接入跟踪，并在终端里启动 agent", "New project: create a folder, track it, and start your agent in a terminal")}">＋</button>` : ""}${API ? `<button class="addp" id="report" title="${L("写本周周报：汇总各项目进展，由你的 agent 凝练，可以继续聊到满意", "Write this week's report: progress across projects, condensed by your agent, revised by talking to it")}">${L("周报", "Report")}</button>` : ""}</div>` : "";
   const head = `<div class="head">
     <div class="head-top"><h1 title="${esc(P.path)}">${esc(S.project.name)}</h1><span class="spacer"></span>
       ${API ? `<span class="sessbtns">
@@ -962,6 +962,7 @@ function settingsDialog() {
       ${c.agent_preset ? "" : `<option value="custom" selected>${L("自定义（配置文件）", "Custom (config file)")}</option>`}</select></label>
     <div class="hint" data-codex hidden>${L("Codex 目前只能从面板打开和恢复会话，项目状态不会自动更新。", "With Codex the panel can open and resume sessions, but project status isn't updated automatically yet.")}</div>
     <label>${L("新建项目的默认位置", "Default location for new projects")}<span class="pathrow"><input type="text" name="projects_dir" value="${esc(c.projects_dir || "")}">${folderButton("pickdefault")}</span></label>
+    <div class="hint">${L("周报", "Weekly report")}${L("：", ": ")}${c.report_template ? L("使用你的模板", "using your template") : L("默认格式", "default format")} <button type="button" class="linkbtn" data-reporttemplate="1">${L("设置模板", "Set template")}</button></div>
     ${P ? `<div class="hint">${L(`当前项目：${esc(P.status.project.name)}`, `This project: ${esc(P.status.project.name)}`)} <button type="button" class="linkbtn" data-untrack="1">${L("停止跟踪", "Stop tracking")}</button></div>` : ""}
     <div class="row2"><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("保存", "Save")}</button></div>
   </form>`;
@@ -1222,6 +1223,15 @@ document.addEventListener("click", e => {
   }
   if (b.id === "theme") return toggleTheme();
   if (b.id === "newproj") return newProjectDialog();
+  if (b.id === "report") {  // the first message stays the user's: we open the terminal and copy, they paste
+    copy(DATA.config.report_command, L("命令已复制", "Command copied"));
+    return op("report_session", {});
+  }
+  if (b.dataset.reporttemplate) {
+    document.querySelector(".modal.settings")?.remove();
+    return askText({ title: L("周报模板", "Report template"), hint: L("粘贴一份往期周报当案例，或者写下要求，比如“按项目分组”“给老板看，少写技术细节”。留空就用默认格式。之后也可以直接告诉 agent“以后都按这个格式”。", "Paste an earlier report as an example, or write what you want, e.g. \"group by project\" or \"for my manager, few technical details\". Empty uses the default format. You can also just tell your agent \"use this format from now on\"."), value: DATA.config?.report_template || "" })
+      .then(v => { if (v !== null) op("save_report_template", { text: v }); });
+  }
   if (b.id === "adoptproj") return adoptProjectDialog();
   if (b.dataset.openfolder) return op("open_folder", {});
   if (b.dataset.settings) return settingsDialog();

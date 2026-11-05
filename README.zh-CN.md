@@ -197,6 +197,10 @@ FORTHMARK_HOME=~/.forthmark-demo/data python3 tools/forthmark.py open
 | `commands/` | 斜杠命令模板 |
 | `vendor/` | 文档预览用的 marked（MIT）、DOMPurify（Apache-2.0 / MPL-2.0）、github-markdown-css（MIT），面板局部更新用的 morphdom（MIT），附许可证 |
 
+## 周报
+
+点面板上的**周报**，或输入 `/forthmark-report`。Forthmark 会汇总有进展的项目本周完成的任务、修复的 Bug、决策、你本人的 Git 提交和未完成事项，由你的 Agent 凝练成草稿，你可以继续对话修改。Forthmark 自身不调用模型，也不读会话记录；这些素材会发给你的 Agent 所用的模型，所以 Agent 会先列出涉及的项目，让你选择排除。在齿轮里的**周报模板**可以放案例或写要求，也可以直接告诉 Agent“以后都按这个格式”。周报保存在 `~/.forthmark/reports`。
+
 ## 配置
 
 面板上的齿轮可以设置终端、Agent（Claude Code 或 Codex）和新项目的位置。其他配置在这个文件里：
