@@ -322,9 +322,7 @@ details[open] summary::before { content: "▾ "; }
 .doc .nm { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .doc .nm .dir { color: var(--ink3); font-weight: 400; }
 .doc .ds { font-size: 11.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.doc .side { display: flex; gap: 5px; align-items: center; flex: none; font-size: 11px; color: var(--ink3); }
-.doc .side .mini { flex: none; }
-.doc:has(.mini) .side { flex-wrap: nowrap; }
+.doc .side { display: flex; flex-direction: row; gap: 5px; align-items: center; flex: none; font-size: 11px; color: var(--ink3); }
 .dtag { font-size: 10.5px; padding: 0 6px; border-radius: 999px; background: var(--blue-bg); color: var(--blue); }
 .upd { font-size: 10.5px; padding: 0 6px; border-radius: 999px; background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-line); }
 .syn { font-size: 10.5px; padding: 0 6px; border-radius: 999px; background: var(--green-bg); color: var(--green); }
