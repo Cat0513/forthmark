@@ -746,14 +746,15 @@ function render() {
     const updated = d.last_viewed && d.mtime > new Date(d.last_viewed).getTime() / 1000;
     const sub = d.purpose || d.title || (d.role ? ROLE[d.role] : "");
     return `<div class="doc" data-doc="${esc(d.path)}" title="${esc(d.path)}">
-      <span class="ic">${d.pinned ? "★" : ICONS[d.role] || (d.script ? "$" : "·")}</span>
+      <span class="ic">${d.pinned ? "★" : ICONS[d.role] || (d.script ? "$" : d.binary ? "▤" : "·")}</span>
       <div class="main"><div class="nm"><span class="dir">${esc(dir)}</span>${esc(name)}</div>${sub ? `<div class="ds">${esc(sub)}</div>` : ""}</div>
       <span class="side">${(d.tags || []).map(t => `<span class="dtag">${esc(t)}</span>`).join("")}
         ${d.checks ? `<span class="minibar" title="${d.checks.done}/${d.checks.total} ${L("已勾选", "checked")}"><span style="width:${Math.round(d.checks.done * 100 / d.checks.total)}%"></span></span>${d.checks.done}/${d.checks.total}` : ""}
         ${d.source ? (d.newer_than_status ? `<span class="upd" title="${L("这份进度来源在状态上次更新之后被改过", "Changed after the status was last updated")}">${L("比状态新", "newer than status")}</span>` : `<span class="syn">${L("已同步", "in sync")}</span>`) : ""}
         ${updated ? `<span class="upd">${L("有更新", "updated")}</span>` : ""}
         ${d.refs?.length ? `<span class="faint">${d.refs.map(esc).join(" ")}</span>` : ""}
-        <span>${ago(new Date(d.mtime * 1000).toISOString())}</span></span></div>`;
+        <span>${ago(new Date(d.mtime * 1000).toISOString())}</span>
+        ${d.binary && API ? `<button class="mini" data-docmore="${esc(d.path)}" title="${L("打开方式、标签、备注", "Open with, tags, notes")}">⋯</button>` : ""}</span></div>`;
   };
   const shownDocs = allDocs.filter(match);
   const sources = shownDocs.filter(d => d.source);
@@ -769,11 +770,14 @@ function render() {
     <div class="ctitle"><h2>📄 ${L("文档", "Docs")}</h2><span class="faint">${L(`${allDocs.length} 份 · 只读索引，不改动项目`, `${allDocs.length} files · read-only index, project untouched`)}</span></div>
     <div class="dtools"><input id="dq" placeholder="${L("搜索文件名、作用、标签…", "Search names, purposes, tags…")}" value="${esc(state.q)}">
       ${allTags.map(t => `<button class="chip ${state.tag === t ? "on" : ""}" data-tagf="${esc(t)}">${esc(t)}</button>`).join("")}
-      ${hiddenCount ? `<button class="chip ${state.showHidden ? "on" : ""}" id="showhidden">${L("已隐藏", "Hidden")} ${hiddenCount}</button>` : ""}</div>
+      ${hiddenCount ? `<button class="chip ${state.showHidden ? "on" : ""}" id="showhidden">${L("已隐藏", "Hidden")} ${hiddenCount}</button>` : ""}
+      ${API ? `<button class="chip" data-ignorefolder="">${L("忽略文件夹…", "Ignore a folder…")}</button>` : ""}</div>
     ${sources.length ? `<div class="dgrp">${L("进度来源 · agent 的进度记录，面板上的状态由它们提炼", "Progress sources · the agent's progress notes the status is distilled from")}</div><div class="sources">${sources.map(docRow).join("")}</div>` : ""}
     ${pinned.length ? `<div class="dgrp">★ ${L("置顶", "Pinned")}</div>${pinned.map(docRow).join("")}` : ""}
     <div class="doccols">${groups}</div>
     ${!shownDocs.length ? `<div class="empty">${allDocs.length ? L("没有匹配的文档", "No matching docs") : P.docs_scanning ? L("正在扫描文档…", "Scanning for documents…") : L("没有发现文档", "No docs found")}</div>` : ""}
+    ${API && (P.docs_ignored || []).length ? `<div class="dgrp">${L("已忽略的文件夹（只是不显示，文件不受影响）", "Ignored folders (only not shown; the files are untouched)")}</div>${P.docs_ignored.map(f =>
+      `<div class="doc"><span class="ic">⊘</span><div class="main"><div class="nm">${esc(f)}/</div></div><button class="mini" data-unignore="${esc(f)}">${L("恢复", "Show again")}</button></div>`).join("")}` : ""}
     ${P.docs_complete === false ? `<div class="faint" style="font-size:11px;margin-top:8px">${L("这个文件夹文件太多，只显示已找到的部分文档", "This folder has too many files; showing the documents found so far")}</div>` : ""}
     ${(P.docs_missing || []).length ? `<div class="dgrp">${L("找不到的文件（之前加过标记）", "Missing files (previously annotated)")}</div>${P.docs_missing.map(d =>
       `<div class="doc"><span class="ic">?</span><div class="main"><div class="nm">${esc(d.path)}</div><div class="ds">${esc(d.note || (d.tags || []).join(L("、", ", ")))}</div></div>
@@ -1100,7 +1104,10 @@ function drawerHead(d) {
       <button class="act" data-dop="tags">${L("标签", "Tags")}${d.tags?.length ? L("：", ": ") + esc(d.tags.join(L("、", ", "))) : ""}</button>
       <button class="act" data-dop="note">${L("备注", "Note")}</button>
       <button class="act" data-dop="hide">${d.hidden ? L("取消隐藏", "Unhide") : L("隐藏", "Hide")}</button>
-      <button class="act primary" data-dop="open">${L("用默认程序打开", "Open in default app")}</button></div>`;
+      ${d.path.includes("/") ? `<button class="act" data-ignorefolder="${esc(d.path.slice(0, d.path.lastIndexOf("/")))}">${L("忽略所在文件夹", "Ignore its folder")}</button>` : ""}
+      ${d.binary ? `<button class="act" data-dop="openwith">${/Mac/.test(navigator.platform) ? L("在访达中显示", "Show in Finder") : L("打开方式…", "Open with…")}</button>` : ""}
+      ${d.script ? `<button class="act primary" data-dop="reveal">${L("在文件夹中显示", "Show in folder")}</button>`
+        : `<button class="act primary" data-dop="open">${L("用默认程序打开", "Open in default app")}</button>`}</div>`;
 }
 async function openDoc(path) {
   if (!API) return toast(L("预览需通过 forthmark.py open 打开面板", "Preview needs the panel opened with forthmark.py open"));
@@ -1121,6 +1128,10 @@ async function openDoc(path) {
   }
   dr.innerHTML = `<div class="dh">${drawerHead(d)}</div><div class="db"><div class="faint">${L("加载中…", "Loading…")}</div></div>`;
   dr.classList.add("open");
+  if (d.binary) {  // nothing to preview; it opens in its own app
+    dr.querySelector(".db").innerHTML = `<div class="empty">${L("这类文件不能在面板里预览，请用上面的按钮打开。", "This kind of file can't be previewed here; use the buttons above.")}</div>`;
+    return;
+  }
   try {
     const [r] = await Promise.all([fetch(`/api/doc?project=${encodeURIComponent(state.project)}&path=${encodeURIComponent(path)}`,
       { headers: { "X-Forthmark-Token": API.token } }), loadLibs()]);
@@ -1170,7 +1181,11 @@ document.addEventListener("click", e => {
     return (curProject().docs || []).some(d => d.path === target) ? openDoc(target) : toast(L("项目里找不到 ", "Not in this project: ") + target);
   }
   const row = e.target.closest("[data-doc]");
-  if (row && !e.target.closest("button")) return openDoc(row.dataset.doc);
+  if (row && !e.target.closest("button")) {
+    const doc = (curProject().docs || []).find(d => d.path === row.dataset.doc);
+    if (doc?.binary && API) return op("doc_open", { path: doc.path });  // a click opens it, like in a file manager
+    return openDoc(row.dataset.doc);
+  }
   const b = e.target.closest("button");
   if (!b) return;
   if (b.id === "dclose") { $("drawer").classList.remove("open"); state.doc = null; saveState(); return; }
@@ -1189,9 +1204,15 @@ document.addEventListener("click", e => {
   if (b.id === "showhidden") { state.showHidden = !state.showHidden; return render(); }
   if (b.dataset.tagf !== undefined) { state.tag = state.tag === b.dataset.tagf ? "" : b.dataset.tagf; return render(); }
   if (b.dataset.forget) return op("doc_forget", { path: b.dataset.forget });
+  if (b.dataset.docmore) return openDoc(b.dataset.docmore);
+  if (b.dataset.unignore) return op("doc_unignore", { path: b.dataset.unignore });
+  if (b.dataset.ignorefolder !== undefined) return askText({ title: L("忽略文件夹", "Ignore a folder"), hint: L("这个文件夹下的文件不再显示在面板上，文件本身不受影响。可以改成上级文件夹。", "Files in this folder stop showing on the panel; the files themselves are untouched. You can change it to a parent folder."), value: b.dataset.ignorefolder, line: true })
+    .then(v => { if (v) { document.querySelector("#dclose")?.click(); op("doc_ignore", { path: v }); } });
   if (b.dataset.dop) {
     const d = curDoc(), path = d.path, kind = b.dataset.dop;
     if (kind === "open") return op("doc_open", { path });
+    if (kind === "openwith") return op("doc_open_with", { path });
+    if (kind === "reveal") return op("doc_reveal", { path });
     if (kind === "pin") return op("doc_meta", { path, pinned: !d.pinned });
     if (kind === "hide") return op("doc_meta", { path, hidden: !d.hidden });
     if (kind === "tags") return askText({ title: L("标签", "Tags"), quote: path, hint: L("用逗号分隔，留空清除", "Comma-separated; empty to clear"), value: (d.tags || []).join(", "), line: true })

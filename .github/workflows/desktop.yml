@@ -25,7 +25,9 @@ jobs:
           {
             npm ci &&
             npm test &&
+            (cd .. && python -m unittest discover -s tests) &&
             npm run dist &&
+            mkdir -p ../release && cp dist/Forthmark-Setup-*.exe dist/Forthmark-Setup-*.exe.blockmap dist/latest.yml ../release/ &&
             ls -l dist/*.exe &&
             ./dist/Forthmark-Setup-*.exe //S &&
             for i in $(seq 60); do [ -f "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" ] && break; sleep 2; done &&
@@ -33,12 +35,16 @@ jobs:
             node test/e2e.js &&
             node test/scroll.js &&
             node test/smoke.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" &&
+            npm version 9.9.9 --no-git-tag-version &&
+            npx electron-builder --win nsis --publish never -c.directories.output=dist-next &&
+            git checkout -- package.json package-lock.json &&
+            node test/update.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" dist-next 9.9.9 &&
             node test/uninstall.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe"
           } 2>&1 | tee ../desktop.log
       - uses: actions/upload-artifact@v4
         with:
           name: Forthmark-Setup
-          path: desktop/dist/Forthmark-Setup-*.exe
+          path: release/
           if-no-files-found: ignore
       - if: failure()
         shell: bash
@@ -46,7 +52,7 @@ jobs:
           node -e "
           const t = require('fs').readFileSync('desktop.log', 'utf8').slice(-3500);
           console.log('::error::' + t.replace(/%/g, '%25').replace(/\r/g, '').replace(/\n/g, '%0A'));"
-  # A version tag makes a draft release; a person reads it and publishes it.
+  # A version tag, once every test above has passed, publishes the release. The app's updater reads latest.yml.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: windows
@@ -61,19 +67,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           file=$(ls Forthmark-Setup-*.exe)
+          [ "$file" = "Forthmark-Setup-${GITHUB_REF_NAME#v}.exe" ] || { echo "tag $GITHUB_REF_NAME doesn't match $file"; exit 1; }
           hash=$(sha256sum "$file" | cut -d' ' -f1)
           cat > notes.md <<EOF
-          Windows preview of Forthmark.
-
-          - Installer with bundled Python: no Python setup or administrator rights needed
-          - Tray app with a count, popover and panel windows, notifications, launch at login
-          - Start from the panel: create a project or track an existing folder
-          - Settings: terminal, agent and default location; open a project's folder
-          - On macOS too: stop tracking from the panel, background document scanning
+          Windows preview of Forthmark. Version 0.1.4 and later update themselves from the tray menu.
 
           The installer isn't code-signed yet, so Chrome and Windows SmartScreen may warn you. See the README for what to do.
 
           SHA256 of \`$file\`: \`$hash\`
           EOF
           sed -i 's/^          //' notes.md
-          gh release create "$GITHUB_REF_NAME" "$file" --repo "$GITHUB_REPOSITORY" --draft --title "$GITHUB_REF_NAME" --notes-file notes.md
+          gh release create "$GITHUB_REF_NAME" "$file" "$file.blockmap" latest.yml --repo "$GITHUB_REPOSITORY" --latest --title "$GITHUB_REF_NAME" --notes-file notes.md

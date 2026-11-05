@@ -37,6 +37,8 @@ let serviceStartedHere = false;
 let starting = null;
 let modalOpen = false, ignoreBlurUntil = 0, popoverHiddenAt = 0;
 let badgeCount = 0, badgeBroken = false;
+let updater = null, updateState = null;  // null | { checking } | { downloading: percent } | { ready: version }
+let manualCheck = false;
 const notifications = new Set();  // a collected Notification no longer reports its click
 
 function readJson(file) {
@@ -140,6 +142,7 @@ function serviceFailed(e) {
 
 function buildMenu() {
   return Menu.buildFromTemplate([
+    ...updateMenuItems(),
     { label: L("打开面板窗口", "Open Panel Window"), click: () => openPanelWindow() },
     { label: L("在浏览器打开", "Open in Browser"), click: () => withServer(() => shell.openExternal(panelURL())) },
     { label: L("刷新", "Refresh"), click: () => { refreshBadge(); popover.webContents.reload(); } },
@@ -147,6 +150,11 @@ function buildMenu() {
     { label: L("开机自启", "Launch at Login"), type: "checkbox", checked: app.getLoginItemSettings().openAtLogin,
       click: item => app.setLoginItemSettings({ openAtLogin: item.checked, args: ["--hidden"] }) },
     { label: L("发送测试通知", "Send Test Notification"), click: testNotification },
+    ...(updater ? [
+      { label: L("检查更新", "Check for Updates"), enabled: !updateState, click: () => checkForUpdates(true) },
+      { label: L("自动检查更新", "Check for Updates Automatically"), type: "checkbox", checked: autoUpdateOn(),
+        click: item => writePrefs({ autoUpdate: item.checked }) },
+    ] : []),
     { type: "separator" },
     { label: L("退出 Forthmark", "Quit Forthmark"), click: () => app.quit() },
   ]);
@@ -324,6 +332,83 @@ function testNotification() {
   dialog.showMessageBox({ message: L("这台电脑的系统不支持通知", "Notifications aren't supported on this system") });
 }
 
+// ---------------------------------------------------------------- updates
+//
+// Replaces only the install folder. Projects and ~/.forthmark are never touched, and nothing installs until
+// the user says so: a restart in the middle of their work would be worse than an old version.
+
+const PREFS = path.join(HOME, "desktop-prefs.json");
+const RELEASES_URL = "https://github.com/Cat0513/forthmark/releases/latest";
+const UPDATE_EVERY = 24 * 60 * 60 * 1000;
+
+const autoUpdateOn = () => readJson(PREFS)?.autoUpdate !== false;
+function writePrefs(change) {
+  fs.mkdirSync(HOME, { recursive: true });
+  fs.writeFileSync(PREFS, JSON.stringify({ ...readJson(PREFS), ...change }));
+}
+
+function updateMenuItems() {
+  if (!updateState) return [];
+  const item = updateState.ready
+    ? { label: L(`重启并更新到 ${updateState.ready}`, `Restart to Update to ${updateState.ready}`), click: installUpdate }
+    : { label: updateState.downloading === undefined ? L("正在检查更新…", "Checking for updates…")
+        : L(`正在下载更新 ${updateState.downloading}%`, `Downloading update ${updateState.downloading}%`), enabled: false };
+  return [item, { type: "separator" }];
+}
+
+function installUpdate() {
+  app.isQuitting = true;
+  updater.quitAndInstall(true, true);  // silent, and start the new version afterwards
+}
+
+function checkForUpdates(manual) {
+  manualCheck = manual;
+  updateState = { checking: true };
+  updater.checkForUpdates().catch(updateFailed);
+}
+
+function updateFailed(e) {
+  logFailure(e);
+  updateState = null;
+  if (!manualCheck) return;  // a background check stays quiet: it'll try again tomorrow
+  manualCheck = false;
+  dialog.showMessageBox({ type: "warning", title: "Forthmark", message: L("没有检查到更新", "Couldn't check for updates"),
+    detail: L("可能是连不上 GitHub。也可以手动下载新版本。", "GitHub may be unreachable. You can also download the new version yourself."),
+    buttons: [L("打开下载页面", "Open Download Page"), L("关闭", "Close")], defaultId: 0, cancelId: 1 })
+    .then(({ response }) => { if (response === 0) shell.openExternal(RELEASES_URL); });
+}
+
+function setupUpdates() {
+  const testFeed = process.env.FORTHMARK_TEST_REPORT && process.env.FORTHMARK_TEST_UPDATE_FEED;
+  if (!app.isPackaged || !IS_WINDOWS) return;
+  ({ autoUpdater: updater } = require("electron-updater"));
+  updater.autoDownload = true;
+  updater.autoInstallOnAppQuit = false;
+  updater.logger = null;
+  updater.on("update-available", () => { updateState = { downloading: 0 }; });
+  updater.on("download-progress", p => { updateState = { downloading: Math.round(p.percent) }; });
+  updater.on("update-not-available", () => {
+    updateState = null;
+    if (manualCheck) dialog.showMessageBox({ title: "Forthmark", message: L(`已经是最新版本（${app.getVersion()}）`, `You're up to date (${app.getVersion()})`) });
+    manualCheck = false;
+  });
+  updater.on("update-downloaded", info => {
+    updateState = { ready: info.version };
+    manualCheck = false;
+    if (testFeed) return installUpdate();  // test/update.js
+    post("Forthmark", L(`新版本 ${info.version} 已下载，在托盘菜单里点“重启并更新”。`, `Version ${info.version} is ready: choose Restart to Update in the tray menu.`));
+  });
+  updater.on("error", updateFailed);
+  if (testFeed) {
+    updater.setFeedURL({ provider: "generic", url: testFeed });
+    if (app.getVersion() !== process.env.FORTHMARK_TEST_UPDATE_TO) checkForUpdates(false);
+    return;
+  }
+  const automatic = () => { if (autoUpdateOn() && !updateState) checkForUpdates(false); };
+  setTimeout(automatic, 30 * 1000);
+  setInterval(automatic, UPDATE_EVERY);
+}
+
 // ---------------------------------------------------------------- lifecycle
 
 process.on("uncaughtException", logFailure);
@@ -369,6 +454,7 @@ async function start() {
     if (!STARTED_HIDDEN) openPanelWindow();
   } catch (e) { serviceFailed(e); }
 
+  setupUpdates();
   setInterval(refreshBadge, 60 * 1000);
   setInterval(checkNotifications, 30 * 60 * 1000);
   setTimeout(checkNotifications, 60 * 1000);
@@ -376,7 +462,7 @@ async function start() {
   if (process.env.FORTHMARK_TEST_REPORT) {  // for test/smoke.js, which runs the packaged app with nothing attached
     const bridge = popover.webContents.executeJavaScript("Boolean(window.webkit?.messageHandlers?.forthmark) && Boolean(document.querySelector('#app'))");
     const loaded = await Promise.race([bridge, new Promise(r => setTimeout(r, 15000, false))]);  // the URL is empty until it commits
-    const report = { url: popover.webContents.getURL(), bridge: loaded };
+    const report = { url: popover.webContents.getURL(), bridge: loaded, version: app.getVersion(), updater: Boolean(updater) };
     fs.writeFileSync(process.env.FORTHMARK_TEST_REPORT, JSON.stringify(report));
   }
   if (process.env.FORTHMARK_TEST) {  // for test/e2e.js: what only a real tray click could reach

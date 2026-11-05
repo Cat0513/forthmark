@@ -93,6 +93,8 @@ git clone https://github.com/Cat0513/forthmark.git && cd forthmark
    这些警告针对的是未签名、下载量少的文件，并不能说明文件内容是否安全。要确认下载的是正版文件，可以运行 `(Get-FileHash .\Forthmark-Setup-*.exe -Algorithm SHA256).Hash`，和发布说明里的校验值对比。如果不放心，可以从源码构建，或使用下面的命令行安装。
 3. 首次启动会自动接入 Claude Code 并打开面板。如果看不到托盘图标，到任务栏的 `^` 里找。左键打开面板，右键打开菜单（开机自启、测试通知、退出）。可以直接在面板上新建项目或接入已有文件夹。
 
+应用每天向 GitHub 检查一次新版本，并在后台下载；只有你在托盘菜单里点“重启并更新”才会安装。更新只替换应用的安装目录，不碰你的项目和 `~\.forthmark`。和普通下载一样，检查更新时 GitHub 能看到你的 IP 地址，Forthmark 自身不会上传任何数据。可以在同一个菜单里关闭。
+
 在 Windows“设置 → 应用”里卸载：会从 Claude Code 中移除 hook，`~\.forthmark` 里的状态数据会保留。
 
 想用命令行安装的话，需要 Python 3.9+（从 [python.org](https://www.python.org/downloads/windows/) 安装，并勾选 Add python.exe to PATH）。这种方式有记录功能和浏览器面板，没有托盘应用和通知：

@@ -89,6 +89,8 @@ Requires Windows 10/11 (64-bit), Git and Claude Code. Python is bundled and admi
    These warnings are about an unsigned, little-known file; they don't verify what's inside. To check you have the real file, compare `(Get-FileHash .\Forthmark-Setup-*.exe -Algorithm SHA256).Hash` with the value in the release notes. If in doubt, build it from source or use the command line install below.
 3. Forthmark connects to Claude Code on first launch and opens the panel. If you don't see its tray icon, look under `^` in the taskbar. Left-click opens the panel, right-click the menu (launch at login, test notification, quit). Start from the panel: create a new project or track an existing folder.
 
+It checks GitHub for a new version once a day and downloads it in the background; it only installs when you choose **Restart to Update** in the tray menu. An update replaces the app's install folder: your projects and `~\.forthmark` aren't touched. The check tells GitHub your IP address, as any download does, and Forthmark itself sends nothing anywhere. You can turn it off in the same menu.
+
 Uninstall it from Windows Settings → Apps: the hooks come out of Claude Code, and your status data in `~\.forthmark` is kept.
 
 Prefer the command line? You'll need Python 3.9+ ([python.org](https://www.python.org/downloads/windows/), with "Add python.exe to PATH" ticked). This gives you recording and the browser panel, without the tray app or notifications:
