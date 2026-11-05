@@ -329,7 +329,7 @@ class FolderPicker(unittest.TestCase):
     @unittest.skipUnless(forthmark.IS_WINDOWS, "PowerShell")
     def test_the_powershell_script_parses(self):
         script = forthmark.WINDOWS_PICK_FOLDER % forthmark.powershell_quote("选择")
-        check = "$null = [scriptblock]::Create($input | Out-String); 'ok'"
+        check = "$null = [scriptblock]::Create(($input | Out-String)); 'ok'"
         r = subprocess.run(["powershell", "-NoProfile", "-Command", check], input=script, capture_output=True, encoding="utf-8", timeout=60)
         self.assertIn("ok", r.stdout, r.stderr)
 
