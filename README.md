@@ -196,7 +196,9 @@ all reading and writing the same ~/.forthmark/projects/<project>/status.json
 
 ## Weekly report
 
-Press **Report** on the panel (or type `/forthmark-report`). Forthmark gathers the week's finished tasks, fixed bugs, decisions, your own git commits and what's open, for every project with progress, and your agent condenses them into a draft you can keep revising by talking to it. Forthmark calls no model itself and doesn't read session transcripts; the material goes to whichever model your agent uses, so it first lists the projects and lets you leave some out. Set your own format under the gear in **Report template**, with an example or requirements, or tell your agent "use this format from now on". Reports are saved in `~/.forthmark/reports`.
+Click **Report** on the panel to open the report page. The top shows where this week stands: **Not written** stands out; **Written** (by your agent or by you) and **Done** (copied or marked done; changing the text takes it back to Written) stay quiet. While it's not written you can choose projects, see the material and set a template, then press **Write with agent** to open a terminal, or **Write it myself**. Each round your agent saves shows up live. **Revise with agent** goes back to the session that wrote it (change the scope or template under **Projects and format** and it's asked to update). **Edit** changes it by hand; if your agent changed it in the meantime you're asked first, nothing is silently overwritten. Last week's report and older ones are further down.
+
+Forthmark calls no model and reads no session transcripts; the chosen projects and last week's report go to the model your agent uses. Reports are kept in `~/.forthmark/reports`. In Claude Code you can also type `/forthmark-report`.
 
 ## Configuration
 

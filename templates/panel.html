@@ -153,6 +153,41 @@ button { font: inherit; cursor: pointer; }
 .projbar .addp { flex: none; display: inline-flex; align-items: center; border: 1px dashed var(--line); background: var(--card);
   border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--ink3); cursor: pointer; font-family: inherit; }
 .projbar .addp:hover { color: var(--blue); border-color: var(--blue); }
+.rdot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); margin-right: 5px; }
+.rtop { display: flex; align-items: center; gap: 10px; padding: 2px 2px 0; }
+.rtop h2 { margin: 0; font-size: 15px; }
+.rbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink3); padding: 9px 14px; }
+.rbar b { font-weight: 500; color: var(--ink2); }
+.rbar .when { margin-left: auto; }
+.rbar.unwritten { background: var(--amber-bg); border-color: var(--amber-line); color: var(--amber); font-size: 14px; padding: 12px 14px; }
+.rbar.unwritten b { font-weight: 700; color: var(--amber); }
+.rrow { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; border-top: 1px solid var(--line2); }
+.rrow:first-child { border-top: 0; }
+.rrow label { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; cursor: pointer; }
+.rrow .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rrow .nums { margin-left: auto; font-size: 11.5px; color: var(--ink3); white-space: nowrap; }
+.rrow.off .nm { color: var(--ink3); }
+.rbtns { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.rbtns .end { margin-left: auto; }
+.rscope { padding: 6px 14px; }
+.rhint { font-size: 11.5px; color: var(--ink2); margin: 8px 0 4px; }
+.rtext { font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.rtext.limit { max-height: 340px; overflow-y: auto; }
+.rtext pre { white-space: pre-wrap; font: inherit; margin: 0; }
+.rtext h1, .rtext h2, .rtext h3 { font-size: 14px; margin: 10px 0 4px; }
+.rtext p, .rtext ul, .rtext ol { margin: 4px 0; }
+.rtext ul, .rtext ol { padding-left: 20px; }
+.rsec { font-size: 12px; font-weight: 600; color: var(--ink2); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.rsec .faint { font-weight: 400; }
+.rsec .act { margin-left: auto; }
+.rold { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; border-top: 1px solid var(--line2); padding: 7px 0; font: inherit; font-size: 12.5px; color: var(--ink2); cursor: pointer; text-align: left; }
+.rold:hover { color: var(--blue); }
+.rold .faint { margin-left: auto; font-size: 11.5px; }
+.modal.wide form { width: min(860px, 100%); }
+.modal.wide textarea, .modal.wide .rpreview { height: min(62vh, 620px); }
+.modal.wide textarea { font-size: 13px; line-height: 1.6; resize: none; }
+.modal.wide .rpreview { overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--sunk); }
+.modal .rconflict { font-size: 12.5px; color: var(--amber); background: var(--amber-bg); border: 1px solid var(--amber-line); border-radius: 8px; padding: 7px 10px; }
 .contbtn { border: 1px solid var(--green-line); background: var(--green-bg); color: var(--green); border-radius: 999px;
   padding: 3px 11px; font-size: 12px; font-weight: 600; white-space: nowrap; flex: none; }
 .contbtn:hover { filter: brightness(.97); }
@@ -418,6 +453,7 @@ let DATA = /*DATA*/null/*END*/;
 // tool itself says goes through L(zh, en); what agents and users wrote is shown as written.
 const EN = DATA?.lang === "en";
 const L = (zh, en) => EN ? en : zh;
+let REPORT = null;  // the weekly report page, when open: { overview, projects: {week: data}, older: {week: entry}, week, openOld }
 document.documentElement.lang = EN ? "en" : "zh-CN";
 // Set when served by `forthmark.py open`: buttons then write the status file directly.
 const API = /*API*/null/*END*/;
@@ -482,6 +518,7 @@ function pulseOf(P) {
 
 function render() {
   const app = $("app");
+  if (REPORT) return renderReport();
   app.dataset.tab = state.tab;
   const projects = DATA.projects;
   if (!projects.length) {
@@ -519,7 +556,7 @@ function render() {
   const chips = projects.length > 1 || API ? `<div class="projbar"><button class="pscroll" data-pscroll="-1" hidden></button><div class="projects">${projects.map(p => {
     const n = p.status.waiting.filter(w => w.status === "open").length;
     return `<button data-project="${esc(p.id)}" class="${p.id === P.id ? "on" : ""}"><span class="dot" style="--c:${pulseOf(p).c}"></span>${esc(p.status.project.name)}${n ? `<span class="n">${n}</span>` : ""}</button>`;
-  }).join("")}</div><button class="pscroll" data-pscroll="1" hidden></button>${API ? `<button class="addp" id="newproj" title="${L("新建项目：建文件夹、接入跟踪，并在终端里启动 agent", "New project: create a folder, track it, and start your agent in a terminal")}">＋</button>` : ""}${API ? `<button class="addp" id="report" title="${L("写本周周报：汇总各项目进展，由你的 agent 凝练，可以继续聊到满意", "Write this week's report: progress across projects, condensed by your agent, revised by talking to it")}">${L("周报", "Report")}</button>` : ""}</div>` : "";
+  }).join("")}</div><button class="pscroll" data-pscroll="1" hidden></button>${API ? `<button class="addp" id="newproj" title="${L("新建项目：建文件夹、接入跟踪，并在终端里启动 agent", "New project: create a folder, track it, and start your agent in a terminal")}">＋</button>` : ""}${API ? `<button class="addp" id="report" title="${DATA.report_unwritten ? L("本周周报还没写", "This week's report isn't written yet") : L("周报", "Weekly report")}">${DATA.report_unwritten ? `<span class="rdot"></span>` : ""}${L("周报", "Report")}</button>` : ""}</div>` : "";
   const head = `<div class="head">
     <div class="head-top"><h1 title="${esc(P.path)}">${esc(S.project.name)}</h1><span class="spacer"></span>
       ${API ? `<span class="sessbtns">
@@ -1223,10 +1260,8 @@ document.addEventListener("click", e => {
   }
   if (b.id === "theme") return toggleTheme();
   if (b.id === "newproj") return newProjectDialog();
-  if (b.id === "report") {  // the first message stays the user's: we open the terminal and copy, they paste
-    copy(DATA.config.report_command, L("命令已复制", "Command copied"));
-    return op("report_session", {});
-  }
+  if (b.id === "report") return openReport();
+  if (b.dataset.report) return reportAction(b.dataset.report, b.dataset.week);
   if (b.dataset.reporttemplate) {
     document.querySelector(".modal.settings")?.remove();
     return askText({ title: L("周报模板", "Report template"), hint: L("粘贴一份往期周报当案例，或者写下要求，比如“按项目分组”“给老板看，少写技术细节”。留空就用默认格式。之后也可以直接告诉 agent“以后都按这个格式”。", "Paste an earlier report as an example, or write what you want, e.g. \"group by project\" or \"for my manager, few technical details\". Empty uses the default format. You can also just tell your agent \"use this format from now on\"."), value: DATA.config?.report_template || "" })
@@ -1296,6 +1331,275 @@ async function op(name, args, quiet, onError) {
     await refresh();
   } catch (e) { toast(L("连不上本地服务，请重新运行 forthmark.py open", "Can't reach the local service: run forthmark.py open again")); }
 }
+// ---- weekly report page. Forthmark gathers and shows; the writing happens with the user's agent, or by hand.
+// Only "unwritten" asks for attention; everything else stays quiet.
+let reportSaving = Promise.resolve();
+const reportGet = async path => {
+  const r = await fetch(path, { headers: { "X-Forthmark-Token": API.token } });
+  if (r.status === 403) { location.reload(); throw new Error("reconnecting"); }
+  return r.json();
+};
+async function reportPost(name, args) {
+  const r = await fetch("/api/op", { method: "POST", headers: { "Content-Type": "application/json", "X-Forthmark-Token": API.token },
+    body: JSON.stringify({ op: name, args }) });
+  if (r.status === 403) { location.reload(); throw new Error("reconnecting"); }
+  return r.json();
+}
+const reportDays = e => {
+  const f = d => `${+d.slice(5, 7)}/${+d.slice(8, 10)}`;
+  return `${f(e.start)}–${f(e.end)}`;
+};
+function reportState(e) {
+  const when = iso => new Date(iso).toLocaleString(EN ? "en-US" : "zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  if (e.state === "done") return { label: L("已完成", "Done"), sub: (e.done_how === "copied" ? L("已复制", "Copied") : L("已标记", "Marked")) + " · " + when(e.done_at) };
+  if (e.state === "written") return { label: L("已写", "Written"), sub: L("更新于 ", "Updated ") + ago(e.updated_at) };
+  return { label: L("未写", "Not written"), sub: "" };
+}
+function reportBody(text) {
+  return `<div class="rtext">${window.marked && window.DOMPurify ? DOMPurify.sanitize(marked.parse(text)) : `<pre>${esc(text)}</pre>`}</div>`;
+}
+function reportFind(id) {
+  const o = REPORT.overview;
+  return [o.this, o.last].find(e => e.id === id) || REPORT.older[id] || o.older.find(e => e.id === id);
+}
+async function loadReportProjects(id) {
+  try {
+    REPORT.projects[id] = await reportGet("/api/report/projects?week=" + id);
+    if (REPORT) render();
+  } catch (e) {}
+}
+async function openReport() {
+  try {
+    const overview = await reportGet("/api/report");
+    REPORT = { overview, projects: {}, older: {}, week: overview.this.id, openOld: null };
+    window.scrollTo(0, 0);
+    render();
+    loadReportProjects(overview.this.id);
+    if (overview.last.state === "unwritten") loadReportProjects(overview.last.id);
+    loadLibs().then(() => { if (REPORT) render(); }).catch(() => {});
+  } catch (e) { toast(L("连不上本地服务，请重新运行 forthmark.py open", "Can't reach the local service: run forthmark.py open again")); }
+}
+async function pollReport() {
+  try {
+    const next = await reportGet("/api/report");
+    if (REPORT) { REPORT.overview = next; pendingRender = true; }  // always: "updated 3 min ago" moves on, and patch() only touches what changed
+    const open = REPORT?.openOld && REPORT.older[REPORT.openOld];
+    if (open) {
+      const e = await reportGet("/api/report/week?week=" + open.id);
+      if (REPORT && JSON.stringify(e) !== JSON.stringify(open)) { REPORT.older[open.id] = e; pendingRender = true; }
+    }
+  } catch (e) {}
+}
+function reportTools(e) {
+  const w = `data-week="${e.id}"`;
+  return `<button class="act" data-report="agent" ${w}>${L("让 Agent 改", "Revise with agent")}</button>
+    <button class="act" data-report="edit" ${w}>${L("手动编辑", "Edit")}</button>
+    <button class="act" data-report="copy" ${w}>${L("复制", "Copy")}</button>
+    ${e.state === "done" ? `<button class="act end" data-report="unmark" ${w}>${L("改回已写", "Back to written")}</button>`
+      : `<button class="act end" data-report="mark" ${w}>${L("标记完成", "Mark done")}</button>`}`;
+}
+// Which projects go to the model and in what format: open before writing, folded afterwards, always reachable.
+function reportScope(e, data, o) {
+    const rows = !data ? `<div class="faint">${L("正在汇总各项目进展…", "Gathering progress…")}</div>`
+      : !data.projects.length ? `<div class="faint">${L("这周还没有记录到进展。你也可以自己写。", "No progress recorded for this week. You can still write it yourself.")}</div>`
+      : data.projects.map(p => {
+          const off = p.excluded;
+          const nums = [p.done && L(`完成 ${p.done}`, `${p.done} done`), p.fixed && L(`修复 ${p.fixed}`, `${p.fixed} fixed`), p.commits && L(`提交 ${p.commits}`, `${p.commits} commits`)].filter(Boolean).join(" · ");
+          return `<div class="rrow${off ? " off" : ""}"><label><input type="checkbox" data-rproject="${esc(p.name)}"${off ? "" : " checked"}><span class="nm">${esc(p.name)}</span></label><span class="nums">${off ? L("这次不发给模型", "stays out") : nums}</span></div>`;
+        }).join("");
+  return `${rows}
+    ${data?.unreadable ? `<div class="faint" style="font-size:11.5px;margin-top:6px">${L(`${data.unreadable} 个项目的状态读不出来，没有列入。`, `${data.unreadable} project(s) couldn't be read and are left out.`)}</div>` : ""}
+    <div class="rbtns" style="font-size:12px"><span class="faint">${L("格式：", "Format: ")}${o.has_template ? L("你的模板", "your template") : L("默认格式", "default")}</span><button type="button" class="linkbtn" data-reporttemplate="1">${L("设置模板", "Set template")}</button></div>`;
+}
+function renderReport() {
+  const app = $("app"), o = REPORT.overview;
+  const e = reportFind(REPORT.week) || o.this;
+  const st = reportState(e);
+  const isThis = e.id === o.this.id;
+  const data = REPORT.projects[e.id];
+  let main;
+  if (e.state === "unwritten") {
+    const some = data?.projects.some(p => !p.excluded);
+    main = `<div class="card">
+      <div class="rsec">${L("包含的项目", "Projects to include")}</div>${reportScope(e, data, o)}
+      <div class="rbtns">
+        <button class="act" data-report="material" data-week="${e.id}">${L("查看素材", "See material")}</button>
+        <button class="act" data-report="edit" data-week="${e.id}">${L("自己写", "Write it myself")}</button>
+        <button class="act primary end" data-report="agent" data-week="${e.id}"${some ? "" : " disabled"}>${L("让 Agent 写 →", "Write with agent →")}</button>
+      </div></div>`;
+  } else {
+    const counted = data ? L(`${data.projects.filter(p => !p.excluded).length}/${data.projects.length} 个项目`, `${data.projects.filter(p => !p.excluded).length}/${data.projects.length} projects`) : "";
+    const changed = o.scope_changed === e.id;
+    main = `<div class="card">${reportBody(e.text)}<div class="rbtns">${reportTools(e)}</div></div>
+      <div class="card rscope"><details data-k="rscope"><summary>${L("项目与格式", "Projects and format")}${counted ? " · " + counted : ""} · ${o.has_template ? L("你的模板", "your template") : L("默认格式", "default")}</summary>
+        ${reportScope(e, data, o)}
+        ${changed ? `<div class="rhint">${L("已调整。周报还没变，点“让 Agent 改”时会让它按新范围更新。", "Changed. The report stays as it is until you press Revise with agent, which tells it to update.")}</div>` : ""}</details></div>`;
+  }
+  const lastData = REPORT.projects[o.last.id];
+  const missedLast = isThis && o.last.state === "unwritten" && lastData?.projects.length;
+  const showLast = isThis && o.last.state !== "unwritten";
+  const oldRows = o.older.map(x => {
+    const open = REPORT.openOld === x.id && REPORT.older[x.id];
+    return `<button class="rold" data-report="old" data-week="${x.id}"><span>${open ? "▾" : "▸"} ${reportDays(x)}</span><span class="faint">${x.state === "done" ? L("已完成", "Done") : L("已写", "Written")}</span></button>
+      ${open && open.text ? `<div style="padding:4px 0 10px">${reportBody(open.text)}<div class="rbtns">
+        <button class="act" data-report="edit" data-week="${x.id}">${L("手动编辑", "Edit")}</button><button class="act" data-report="copy" data-week="${x.id}">${L("复制", "Copy")}</button></div></div>` : ""}`;
+  }).join("");
+  patch(app, `<div class="topbar"><div class="rtop">
+      <button class="act" data-report="back">← ${L("返回", "Back")}</button><h2>${L("周报", "Weekly report")}</h2>
+      ${isThis ? "" : `<button class="act" data-report="week" data-week="${o.this.id}">${L("回到本周", "This week")}</button>`}
+    </div></div>
+    <div class="scroller">
+      <div class="card rbar ${e.state}"><b>${isThis ? L("本周", "This week") : L("上周", "Last week")} · ${reportDays(e)} · ${st.label}</b>${st.sub ? `<span class="when">${esc(st.sub)}</span>` : ""}</div>
+      ${main}
+      ${missedLast ? `<div class="card rbar"><span>${L(`上周（${reportDays(o.last)}）没有写`, `Last week (${reportDays(o.last)}) wasn't written`)}</span><button class="act" style="margin-left:auto" data-report="week" data-week="${o.last.id}">${L("补写", "Write it")}</button></div>` : ""}
+      ${showLast ? `<div class="card"><div class="rsec">${L("上周写了什么", "What last week said")} <span class="faint">${reportDays(o.last)} · ${reportState(o.last).label}</span>
+          <button class="act" data-report="edit" data-week="${o.last.id}">${L("编辑", "Edit")}</button><button class="act" style="margin-left:0" data-report="copy" data-week="${o.last.id}">${L("复制", "Copy")}</button></div>
+        ${reportBody(o.last.text).replace('class="rtext"', 'class="rtext limit"')}</div>` : ""}
+      ${oldRows ? `<div class="card"><div class="rsec">${L("更早", "Earlier")}</div>${oldRows}</div>` : ""}
+    </div>`);
+  fitPopover();
+}
+async function reportEntry(id) {
+  const known = reportFind(id);
+  return known && known.text !== undefined || known?.state === "unwritten" ? known : (REPORT.older[id] = await reportGet("/api/report/week?week=" + id));
+}
+async function reportAction(what, id) {
+  try {
+    if (what === "back") { REPORT = null; return render(); }
+    if (what === "week") {
+      REPORT.week = id;
+      window.scrollTo(0, 0);
+      render();
+      return loadReportProjects(id);
+    }
+    if (what === "old") {
+      REPORT.openOld = REPORT.openOld === id ? null : id;
+      if (REPORT.openOld && !REPORT.older[id]) REPORT.older[id] = await reportGet("/api/report/week?week=" + id);
+      return render();
+    }
+    if (what === "agent") {
+      await reportSaving;
+      const res = await reportPost("report_start", { week: id });
+      if (!res.ok) return toast(L("没有成功：", "Didn't work: ") + res.error);
+      if (res.paste) return copy(res.paste, L("已打开终端，要求已复制，请粘贴并回车", "Terminal opened and the request copied: paste it and press Enter"));
+      refresh();
+      return toast(res.updated ? L("已回到写周报的会话，并让它按新范围更新", "Back in the report's session, asked to update to the new scope")
+        : res.resumed ? L("已回到写周报的会话，说说想怎么改", "Back in the report's session: say what to change")
+        : L("已在终端里打开 Agent，这里会实时显示它写的内容", "Your agent is open in a terminal; what it writes shows up here"));
+    }
+    if (what === "material") {
+      await reportSaving;
+      const res = await reportPost("report_material", { week: id });
+      if (!res.ok) return toast(L("没有成功：", "Didn't work: ") + res.error);
+      return reportMaterial(res.text);
+    }
+    if (what === "edit") return reportEdit(await reportEntry(id));
+    if (what === "copy") {
+      const e = await reportEntry(id);
+      copy(e.text, L("已复制", "Copied"));
+      const res = await reportPost("report_mark", { week: id, how: "copied" });
+      if (res.ok) await afterReportChange(id, res.entry);
+      return;
+    }
+    if (what === "mark" || what === "unmark") {
+      const res = await reportPost("report_mark", { week: id, how: what === "mark" ? "marked" : null });
+      if (!res.ok) return toast(L("没有成功：", "Didn't work: ") + res.error);
+      return afterReportChange(id, res.entry);
+    }
+  } catch (e) { if (e.message !== "reconnecting") toast(L("连不上本地服务，请重新运行 forthmark.py open", "Can't reach the local service: run forthmark.py open again")); }
+}
+async function afterReportChange(id, entry) {
+  if (REPORT.older[id]) REPORT.older[id] = entry;
+  REPORT.overview = await reportGet("/api/report");
+  render();
+  refresh();
+}
+function reportMaterial(text) {
+  const m = document.createElement("div");
+  m.className = "modal wide";
+  m.innerHTML = `<form><h3>${L("发给 Agent 的素材", "What your agent will get")}</h3><div class="rpreview"><div class="rtext"><pre>${esc(text)}</pre></div></div>
+    <div class="row2"><button type="button" class="act" data-close>${L("关闭", "Close")}</button></div></form>`;
+  document.body.appendChild(m);
+  const close = () => { document.removeEventListener("keydown", onKey, true); m.remove(); };
+  const onKey = e => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+  document.addEventListener("keydown", onKey, true);
+  m.addEventListener("click", e => { if (e.target === m || e.target.closest("[data-close]")) close(); });
+  m.querySelector("form").addEventListener("submit", e => e.preventDefault());
+}
+function reportEdit(entry) {
+  const id = entry.id;
+  let base = entry.version || null, original = entry.text || "", force = false;
+  const m = document.createElement("div");
+  m.className = "modal wide";
+  m.innerHTML = `<form>
+    <h3>${L("编辑周报", "Edit report")} · ${reportDays(entry)}</h3>
+    <div class="rconflict" hidden></div>
+    <textarea name="text" placeholder="${L("直接写，支持 Markdown", "Just write; Markdown works")}"></textarea>
+    <div class="rpreview" hidden></div>
+    <div class="row2"><span class="keys">${/Mac/.test(navigator.platform) ? "⌘ ↩" : "Ctrl + Enter"}</span>
+      <button type="button" class="act" data-preview>${L("预览", "Preview")}</button>
+      <button type="button" class="act" data-close>${L("取消", "Cancel")}</button>
+      <button type="submit" class="act primary">${L("保存", "Save")}</button></div>
+  </form>`;
+  document.body.appendChild(m);
+  const f = m.querySelector("form"), text = f.elements.text, note = m.querySelector(".rconflict"), preview = m.querySelector(".rpreview"), pbtn = m.querySelector("[data-preview]"), submit = f.querySelector("[type=submit]");
+  text.value = original;
+  text.focus();
+  const close = () => { document.removeEventListener("keydown", onKey, true); m.remove(); };
+  function onKey(e) {
+    const composing = e.isComposing || e.keyCode === 229;  // these keys belong to the input method
+    if (composing) return;
+    if (e.key === "Escape") { e.stopPropagation(); if (text.value === original) close(); else text.focus(); }
+    else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); f.requestSubmit(); }
+  }
+  document.addEventListener("keydown", onKey, true);
+  m.addEventListener("click", async e => {
+    if (e.target.closest("[data-close]")) return close();  // a stray click outside shouldn't throw away what was typed
+    if (e.target.closest("[data-preview]")) {
+      const show = preview.hidden;
+      if (show) { await loadLibs().catch(() => {}); preview.innerHTML = reportBody(text.value); }
+      preview.hidden = !show; text.hidden = show;
+      pbtn.textContent = show ? L("继续编辑", "Back to editing") : L("预览", "Preview");
+    }
+    if (e.target.dataset.loadnew !== undefined) {  // take the agent's version, dropping this edit
+      text.value = original = e.target._text; base = e.target._version; force = false;
+      note.hidden = true; submit.textContent = L("保存", "Save");
+    }
+  });
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    try {
+      const res = await reportPost("report_save", { week: id, text: text.value, base, force });
+      if (res.conflict) {
+        force = true;
+        submit.textContent = L("用我的覆盖", "Overwrite with mine");
+        note.hidden = false;
+        note.innerHTML = `${L("你编辑时，这份周报被改过了（可能是 Agent）。你的内容还没保存。", "This report changed while you were editing (probably your agent). Your text isn't saved yet.")} <button type="button" class="linkbtn" data-loadnew>${L("放弃我的，载入新版本", "Drop mine, load the new version")}</button>`;
+        const link = note.querySelector("[data-loadnew]");
+        link._text = res.conflict.text || "";
+        link._version = res.conflict.version || null;
+        return;
+      }
+      if (!res.ok) return toast(L("没有成功：", "Didn't work: ") + res.error);
+      close();
+      toast(L("已保存", "Saved"));
+      await afterReportChange(id, res.entry);
+    } catch (err) { if (err.message !== "reconnecting") toast(L("连不上本地服务，你的内容还在文本框里", "Can't reach the local service; your text is still in the box")); }
+  });
+}
+document.addEventListener("change", e => {
+  const name = e.target.dataset?.rproject;
+  if (!REPORT || name === undefined) return;
+  const data = REPORT.projects[REPORT.week];
+  const p = data?.projects.find(x => x.name === name);
+  if (!p) return;
+  p.excluded = !e.target.checked;
+  e.target.blur();  // a focused checkbox would count as typing and hold back the refresh
+  for (const d of Object.values(REPORT.projects)) for (const x of d.projects) if (x.name === name) x.excluded = p.excluded;
+  reportSaving = reportPost("report_exclude", { name, excluded: p.excluded }).then(pollReport).catch(() => {});
+  render();
+});
+
 let pendingRender = false;
 async function refresh() {
   try {
@@ -1304,8 +1608,9 @@ async function refresh() {
     if (!r.ok) return;
     const next = await r.json();
     if (next.scan) showScan(next.scan);
-    const sig = d => JSON.stringify([d.projects, d.config]);
+    const sig = d => JSON.stringify([d.projects, d.config, d.report_unwritten]);
     if (sig(next) !== sig(DATA)) { DATA = next; pendingRender = true; }
+    if (REPORT) await pollReport();
     if (pendingRender && !typing()) { pendingRender = false; render(); refreshDrawer(); }  // deferred while typing
   } catch (e) {}
 }

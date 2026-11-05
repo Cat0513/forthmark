@@ -8,7 +8,7 @@ Usage:
   forthmark.py add [DIR]         start tracking a project (its git root; --here for DIR itself); nothing is written
   forthmark.py remove [DIR]      stop tracking a project (status data is kept)
   forthmark.py move OLD NEW      the project folder was moved/renamed: keep its status under the new path
-  forthmark.py report [--last-week] [--only=A,B] [--exclude=A,B]   material for the weekly report, for your agent to write up
+  forthmark.py report [--last-week | --week=2026-W45] [--only=A,B] [--exclude=A,B]   material for the weekly report, for your agent to write up
   forthmark.py new NAME [--dir=PATH] [--goal="…"]   new folder, tracked, your agent opened in a terminal (you type first)
   forthmark.py session [DIR]     ＋ a new agent session in your terminal (it gets the project's status)
   forthmark.py continue [DIR]    ▶ the agent's most recent session in that folder
@@ -1237,6 +1237,12 @@ REPORT_TEMPLATE = HOME / "report-template.md"
 REPORT_TEMPLATE_LIMIT = 4000
 REPORT_COMMITS = 40
 REPORT_TODOS = 5
+REPORTS = HOME / "reports"
+REPORT_MARKS = REPORTS / "marks.json"  # which version of a report was copied or marked done
+REPORT_EXCLUDE = HOME / "report-exclude.json"  # projects the user keeps out of reports: this goes to a model
+REPORT_SESSION = REPORTS / "session.json"  # which week the latest agent session here was for, and with what scope
+REPORT_SIZE_LIMIT = 200000
+REPORT_LAST_LIMIT = 4000
 
 
 def load_report_template():
@@ -1262,6 +1268,156 @@ def report_week(last=False, today=None):
     today = today or date.today()
     monday = today - timedelta(days=today.weekday() + (7 if last else 0))
     return monday, monday + timedelta(days=6)
+
+
+def report_id(start):
+    year, week, _ = start.isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+def report_week_of(week_id):
+    """Monday and Sunday of a week like 2026-W45."""
+    m = re.fullmatch(r"(\d{4})-W(\d{2})", str(week_id))
+    try:
+        monday = date.fromisocalendar(int(m[1]), int(m[2]), 1)
+    except (TypeError, ValueError):
+        raise OpError(L(f"周次不对：{week_id}", f"Not a week: {week_id}"))
+    return monday, monday + timedelta(days=6)
+
+
+def report_path(week_id):
+    report_week_of(week_id)  # the id becomes a file name
+    return REPORTS / f"{week_id}.md"
+
+
+def load_report_exclude():
+    try:
+        names = json.loads(REPORT_EXCLUDE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {n for n in names if isinstance(n, str)} if isinstance(names, list) else set()
+
+
+def save_report_exclude(names):
+    names = sorted({str(n) for n in names})
+    if names:
+        HOME.mkdir(parents=True, exist_ok=True)
+        write_json(REPORT_EXCLUDE, names)
+    else:
+        REPORT_EXCLUDE.unlink(missing_ok=True)
+
+
+def load_report_marks():
+    try:
+        marks = json.loads(REPORT_MARKS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return marks if isinstance(marks, dict) else {}
+
+
+def report_entry(week_id, text=True):
+    """A week's report and where it stands. Only "unwritten" asks for attention; "written" means there's text,
+    whoever wrote it; "done" holds for the version that was copied or marked, so changing the text undoes it."""
+    start, end = report_week_of(week_id)
+    entry = {"id": week_id, "start": start.isoformat(), "end": end.isoformat(), "state": "unwritten"}
+    path = report_path(week_id)
+    try:
+        body = path.read_text(encoding="utf-8")
+        st = path.stat()
+    except (OSError, ValueError):
+        return entry
+    if not body.strip():
+        return entry
+    version = str(st.st_mtime_ns)
+    entry.update(state="written", version=version, updated_at=datetime.fromtimestamp(st.st_mtime).astimezone().isoformat(timespec="seconds"))
+    mark = load_report_marks().get(week_id)
+    if isinstance(mark, dict) and mark.get("version") == version:
+        entry.update(state="done", done_at=mark.get("at"), done_how=mark.get("how"))
+    if text:
+        entry["text"] = body
+    return entry
+
+
+def report_overview(today=None):
+    """What the report page shows; cheap enough to poll. Older weeks are listed, and read when opened."""
+    this, _ = report_week(today=today)
+    last, _ = report_week(last=True, today=today)
+    pinned = {report_id(this), report_id(last)}
+    older = []
+    if REPORTS.is_dir():
+        for f in REPORTS.glob("*-W*.md"):
+            try:
+                if f.stem not in pinned and report_week_of(f.stem)[0] < last:
+                    older.append(report_entry(f.stem, text=False))
+            except OpError:  # somebody else's file
+                pass
+    older = [e for e in older if e["state"] != "unwritten"]
+    older.sort(key=lambda e: e["id"], reverse=True)
+    session = load_report_session()
+    return {"this": report_entry(report_id(this)), "last": report_entry(report_id(last)), "older": older,
+            "folder": str(REPORTS), "has_template": bool(load_report_template()),
+            "scope_changed": session.get("week") if session.get("scope") != report_scope() else None}
+
+
+def report_projects(week_id):
+    """Who has progress in a week, for choosing what goes to the model. Runs git, so only on demand."""
+    start, end = report_week_of(week_id)
+    excluded = load_report_exclude()
+    found, unreadable = [], 0
+    for pid, entry in load_registry()["projects"].items():
+        if is_system_dir(entry["path"]):
+            continue
+        try:
+            if validate_project(pid)[0]:
+                unreadable += 1
+                continue
+            facts = report_project_facts(pid, entry, start, end)
+        except (OSError, ValueError, KeyError):
+            unreadable += 1
+            continue
+        if facts:
+            found.append({"name": facts["name"], "done": len(facts["done"]), "fixed": len(facts["fixed"]),
+                          "commits": len(facts["commits"]) + facts["more_commits"], "excluded": facts["name"] in excluded})
+    found.sort(key=lambda f: f["name"].lower())
+    return {"projects": found, "unreadable": unreadable}
+
+
+class ReportConflict(Exception):
+    pass
+
+
+def save_report(week_id, text, base=None, force=False):
+    """Save an edit from the panel. The agent writes this file too, so never overwrite a version the user hasn't seen."""
+    text = str(text).strip()
+    if not text:
+        raise OpError(L("周报是空的，没有保存", "The report is empty; nothing was saved"))
+    if len(text) > REPORT_SIZE_LIMIT:
+        raise OpError(L("周报太长了", "The report is too long"))
+    path = report_path(week_id)
+    current = report_entry(week_id)
+    if not force and current.get("version") != (base or None):
+        raise ReportConflict(json.dumps(current, ensure_ascii=False))
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text + "\n", encoding="utf-8")
+    replace_file(tmp, path)
+    return report_entry(week_id)
+
+
+def mark_report(week_id, how):
+    """how: copied, marked, or None to take the mark away."""
+    report_week_of(week_id)
+    marks = load_report_marks()
+    if how is None:
+        marks.pop(week_id, None)
+    else:
+        entry = report_entry(week_id, text=False)
+        if entry["state"] == "unwritten":
+            raise OpError(L("这周的周报还没写", "This week's report isn't written yet"))
+        marks[week_id] = {"version": entry["version"], "how": "copied" if how == "copied" else "marked", "at": now_iso()}
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    write_json(REPORT_MARKS, marks)
+    return report_entry(week_id)
 
 
 def report_commits(path, start, end):
@@ -1307,8 +1463,8 @@ def report_project_facts(pid, entry, start, end):
     }
 
 
-def report_text(start, end, only=(), exclude=()):
-    active, quiet, unreadable = [], [], []
+def report_text(start, end, only=(), exclude=(), material_only=False):
+    active, quiet, unreadable, left_out = [], [], [], 0
     for pid, entry in load_registry()["projects"].items():
         name = entry.get("name", pid)
         if is_system_dir(entry["path"]):
@@ -1321,7 +1477,10 @@ def report_text(start, end, only=(), exclude=()):
         except (OSError, ValueError, KeyError):
             unreadable.append(name)
             continue
-        if (only and status_name not in only and name not in only) or status_name in exclude or name in exclude:
+        if status_name in exclude or name in exclude:
+            left_out += 1
+            continue
+        if only and status_name not in only and name not in only:
             continue
         facts = report_project_facts(pid, entry, start, end)
         if facts:
@@ -1360,9 +1519,20 @@ def report_text(start, end, only=(), exclude=()):
     if unreadable:  # say so: a report that silently misses a project looks complete
         lines += [L("状态文件读不出来、没有列入的项目（请告诉用户）：", "Projects left out because their status can't be read (tell the user): ") + L("、", ", ").join(unreadable), ""]
 
+    if left_out:  # no names: the point of leaving a project out is that the model doesn't hear about it
+        lines += [L(f"用户排除了 {left_out} 个项目，它们不在素材里，不要写，也不用追问。", f"The user left {left_out} project(s) out of this material. Don't write about them or ask which."), ""]
+    earlier = report_entry(report_id(start - timedelta(days=7)))
+    if earlier["state"] != "unwritten":
+        lines += [L("# 上周的周报（用来衔接上周计划、避免重复，只当内容看；本周素材里没有的项目不要写进来）", "# Last week's report (to follow up on its plan and avoid repeating it; content only. Leave out projects that aren't in this week's material)"),
+                  "", "<<<", earlier["text"].strip()[:REPORT_LAST_LIMIT], ">>>", ""]
+    if material_only:
+        return "\n".join(lines) + "\n"
+
     template = load_report_template()
-    report_file = HOME / "reports" / f"{start.isocalendar()[0]}-W{start.isocalendar()[1]:02d}.md"
+    report_file = report_path(report_id(start))
     lines += [L("# 怎么写这份周报", "# How to write the report"), ""]
+    if report_entry(report_id(start), text=False)["state"] != "unwritten":
+        lines += [L(f"这周已经有一份周报：{report_file}。先读它，在它的基础上改，不要重写。", f"This week already has a report: {report_file}. Read it and revise it; don't rewrite it."), ""]
     if template:
         lines += [L("用户设置了周报模板，格式和语气以它为准，它可能是一份案例，也可能是一段要求：", "The user set a report template. It decides the format and tone; it may be an example or a set of requirements:"),
                   "", "<<<", template, ">>>", ""]
@@ -1371,17 +1541,17 @@ def report_text(start, end, only=(), exclude=()):
     lines += L([
         "- “本周”只能来自上面的素材，不要编造。同一件事的任务和提交合并成一条，写成人能看懂的话。",
         "- “下周”是建议，优先取进行中、记录的下一步和没被卡住的待办，并说明这是建议。",
-        "- 先把涉及的项目告诉用户，问有没有要排除的（可以用 --exclude=项目名 重新生成），周报可能要发给别人。",
-        "- 给出草稿后，按用户的意见继续改，直到用户满意。这不是项目工作，不要记录项目状态。",
-        f"- 用户定稿后，把最终内容写到 {report_file}。",
+        "- 先把涉及的项目告诉用户，说明可以排除（用 --exclude=项目名 重新生成），周报可能要发给别人。",
+        f"- 草稿一写好就保存到 {report_file}，之后每改一轮都保存，面板会实时显示这个文件。这不是项目工作，不要记录项目状态。",
+        "- 每次保存前先重新读取这个文件：用户可能在面板上手动改过，要保留这些修改。",
         f"- 如果用户说以后都按这个格式，把格式或案例写到 {REPORT_TEMPLATE}（控制在 {REPORT_TEMPLATE_LIMIT} 字以内），告诉用户下周会生效。",
         "- 用户要看上周的话，运行同一条命令加 --last-week。",
     ], [
         "- \"This week\" must come only from the material above; never invent. Merge a task and its commits into one plain-language point.",
         "- \"Next week\" is a suggestion: prefer what's in progress, the recorded next step and unblocked to-dos, and say it's a suggestion.",
-        "- First tell the user which projects are included and ask whether to leave any out (regenerate with --exclude=NAME): the report may go to other people.",
-        "- After the draft, keep revising with the user until they're happy. This isn't project work: don't record project status.",
-        f"- When the user settles on it, write the final text to {report_file}.",
+        "- First tell the user which projects are included and that any can be left out (regenerate with --exclude=NAME): the report may go to other people.",
+        f"- Save the draft to {report_file} as soon as it's written, and after every round of changes: the panel shows this file live. This isn't project work: don't record project status.",
+        "- Read that file again before each save: the user may have edited it on the panel, and those edits stay.",
         f"- If the user wants this format from now on, write the format or an example to {REPORT_TEMPLATE} (under {REPORT_TEMPLATE_LIMIT} characters) and say it applies next time.",
         "- For last week, run the same command with --last-week.",
     ])
@@ -1391,16 +1561,53 @@ def report_text(start, end, only=(), exclude=()):
 def cmd_report(_directory):
     opts = dict(a[2:].split("=", 1) for a in sys.argv[2:] if a.startswith("--") and "=" in a)
     names = lambda key: {n.strip() for n in re.split(r"[,，]", opts.get(key, "")) if n.strip()}
-    start, end = report_week("--last-week" in sys.argv)
-    print(report_text(start, end, names("only"), names("exclude")))
+    start, end = report_week_of(opts["week"]) if "week" in opts else report_week("--last-week" in sys.argv)
+    print(report_text(start, end, names("only"), names("exclude") | load_report_exclude()))
     return 0
 
 
-def open_report_session():
-    """A session of its own, outside every project, so it isn't taken for work on one of them."""
-    reports = HOME / "reports"
-    reports.mkdir(parents=True, exist_ok=True)
-    launch_agent(reports)
+def report_prompt(week_id):
+    return L(f"运行 {CLI} report --week={week_id}，按输出里的要求和我一起写周报",
+             f"Run {CLI} report --week={week_id} and write the weekly report with me as its output says")
+
+
+def report_scope():
+    """What the agent was told to work from. Hashed: this only needs to say whether it changed."""
+    return {"exclude": sorted(load_report_exclude()), "template": hashlib.sha256(load_report_template().encode("utf-8")).hexdigest()}
+
+
+def load_report_session():
+    try:
+        session = json.loads(REPORT_SESSION.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return session if isinstance(session, dict) else {}
+
+
+def start_report(week_id):
+    """Open the agent, in a folder of its own so it isn't taken for work on a project. The user pressed the button,
+    so that request is the first message. A report already written in the latest session goes back to that
+    conversation, saying nothing unless the projects or the format changed: what to change is the user's to say.
+    Returns how it went; "paste" is for a hand-written agent command, which may not take a prompt."""
+    report_week_of(week_id)
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    cfg = load_config()
+    quote = powershell_quote if IS_WINDOWS else shlex.quote
+    if agent_preset(cfg) is None:
+        launch_agent(REPORTS)
+        return {"paste": report_prompt(week_id)}
+    session, scope = load_report_session(), report_scope()
+    resume = session.get("week") == week_id and report_entry(week_id, text=False)["state"] != "unwritten"
+    updated = resume and session.get("scope") != scope
+    if not resume:
+        command = f"{cfg['agent']} {quote(report_prompt(week_id))}"
+    elif updated:
+        command = f"{cfg['resume_last']} {quote(L(f'项目范围或周报格式改了。运行 {CLI} report --week={week_id} 取最新素材，按它更新周报，不在素材里的项目要去掉。', f'The projects or the format changed. Run {CLI} report --week={week_id} for the latest material and update the report from it, removing projects that are no longer in it.'))}"
+    else:
+        command = cfg["resume_last"]
+    launch_agent(REPORTS, command)
+    write_json(REPORT_SESSION, {"week": week_id, "scope": scope})
+    return {"resumed": resume, "updated": updated}
 
 
 def cmd_docs(directory):
@@ -2230,13 +2437,15 @@ def panel_payload():
                 traceback.print_exc()
     projects.sort(key=lambda p: p["last_activity"], reverse=True)
     cfg = load_config()
-    return {"generated_at": now_iso(), "projects": projects, "lang": ui_lang(), "scan": SCANNER.state() if SCANNER else None,
+    monday = report_week()[0].isoformat()
+    return {"generated_at": now_iso(), "projects": projects,
+            # Only this asks for attention; it's checked without running git, so it's cheap to send with every state.
+            "report_unwritten": report_entry(report_id(report_week()[0]), text=False)["state"] == "unwritten"
+                                and any(p["last_activity"][:10] >= monday for p in projects), "lang": ui_lang(), "scan": SCANNER.state() if SCANNER else None,
             "config": {"projects_dir": os.path.expanduser(cfg["projects_dir"]), "terminal": cfg["terminal"],
                        "agent": cfg["agent"].split()[0], "git_init": cfg["git_init"], "projects_dir_raw": cfg["projects_dir"],
                        "terminal_options": [{"id": t, "installed": terminal_installed(t)} for t in TERMINALS],
                        "agent_preset": agent_preset(cfg), "report_template": load_report_template(),
-                       "report_command": "/forthmark-report" if agent_preset(cfg) == "claude" else
-                           L(f"运行 {CLI} report，按输出里的要求和我一起写周报", f"Run {CLI} report and write the weekly report with me as its output says"),
                        "terminal_name": {"ghostty": "Ghostty", "windows-terminal": "Windows Terminal", "powershell": "PowerShell"}.get(
                            pick_terminal(cfg["terminal"]), L("终端", "Terminal"))}}
 
@@ -2331,6 +2540,17 @@ def make_handler(token):
                 if not self.authorized():
                     return self.send(403, '{"error": "forbidden"}')
                 self.send(200, json.dumps(panel_payload(), ensure_ascii=False))
+            elif self.path.split("?")[0] in ("/api/report", "/api/report/projects", "/api/report/week"):
+                if not self.authorized():
+                    return self.send(403, '{"error": "forbidden"}')
+                import urllib.parse
+                route, _, query = self.path.partition("?")
+                week = urllib.parse.parse_qs(query).get("week", [""])[0]
+                try:
+                    data = report_overview() if route == "/api/report" else report_projects(week) if route.endswith("projects") else report_entry(week)
+                except OpError as e:
+                    return self.send(400, json.dumps({"error": str(e)}, ensure_ascii=False))
+                self.send(200, json.dumps(data, ensure_ascii=False))
             else:
                 self.send(404, '{"error": "not found"}')
 
@@ -2350,9 +2570,29 @@ def make_handler(token):
                     pid = adopt_project(req.get("args", {}).get("dir", ""))
                     render_panel()
                     return self.send(200, json.dumps({"ok": True, "project": pid, "text": L("已接入，agent 已在终端里打开，等你说第一句话", "Tracked; your agent is open in the terminal, waiting for your first message")}, ensure_ascii=False))
-                if req.get("op") == "report_session":
-                    open_report_session()
-                    return self.send(200, json.dumps({"ok": True, "text": L("命令已复制，在打开的终端里粘贴并回车", "Command copied: paste it in the terminal that opened and press Enter")}, ensure_ascii=False))
+                if req.get("op") == "report_start":
+                    a = req.get("args", {})
+                    return self.send(200, json.dumps({"ok": True, **start_report(a.get("week", ""))}, ensure_ascii=False))
+                if req.get("op") == "report_exclude":
+                    a = req.get("args", {})
+                    names = load_report_exclude()
+                    save_report_exclude(names | {str(a.get("name"))} if a.get("excluded") else names - {str(a.get("name"))})
+                    return self.send(200, json.dumps({"ok": True}))
+                if req.get("op") == "report_material":
+                    a = req.get("args", {})
+                    return self.send(200, json.dumps({"ok": True, "text": report_text(*report_week_of(a.get("week", "")), exclude=load_report_exclude(), material_only=True)}, ensure_ascii=False))
+                if req.get("op") == "report_save":
+                    a = req.get("args", {})
+                    try:
+                        entry = save_report(a.get("week", ""), a.get("text", ""), a.get("base"), bool(a.get("force")))
+                    except ReportConflict as e:
+                        return self.send(200, json.dumps({"ok": False, "conflict": json.loads(str(e))}, ensure_ascii=False))
+                    render_panel()
+                    return self.send(200, json.dumps({"ok": True, "entry": entry}, ensure_ascii=False))
+                if req.get("op") == "report_mark":
+                    a = req.get("args", {})
+                    entry = mark_report(a.get("week", ""), a.get("how"))
+                    return self.send(200, json.dumps({"ok": True, "entry": entry}, ensure_ascii=False))
                 if req.get("op") == "save_report_template":
                     save_report_template(req.get("args", {}).get("text", ""))
                     return self.send(200, json.dumps({"ok": True, "text": L("周报模板已保存", "Report template saved")}, ensure_ascii=False))
@@ -2439,6 +2679,7 @@ def cmd_serve(_directory):
     write_json(SERVER_INFO, {"port": server.server_address[1], "pid": os.getpid(), "token": token})
     os.chmod(SERVER_INFO, 0o600)  # the token lets the menu bar app call the API; only this user can read it
 
+    add_new_commands()
     global SCANNER
     SCANNER = DocScanner()
 
@@ -2550,6 +2791,28 @@ def drop_our_hooks(settings):
         del settings["hooks"]
 
 
+def install_command(cmd_dir, name):
+    src = KIT / "commands" / ("en" if ui_lang() == "en" else "") / name  # re-run setup after changing "lang"
+    (cmd_dir / name).write_text(src.read_text(encoding="utf-8").replace("{CLI}", CLI), encoding="utf-8")
+
+
+def add_new_commands():
+    """A git pull can bring a new command, and nothing runs setup then. Only for people who ran setup,
+    only what's missing, and on the manifest so uninstalling removes it."""
+    try:
+        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        cmd_dir = CLAUDE_DIR / "commands"
+        missing = [n for n in COMMANDS if n not in manifest.get("commands", [])]
+        for name in missing:
+            if not (cmd_dir / name).exists():
+                install_command(cmd_dir, name)
+        if missing:
+            manifest["commands"] = manifest.get("commands", []) + missing
+            write_json(MANIFEST, manifest)
+    except (OSError, ValueError, AttributeError):  # not set up, or nothing we can fix from here
+        pass
+
+
 def cmd_setup(_directory):
     HOME.mkdir(parents=True, exist_ok=True)
     HOME.chmod(0o700)  # status can name clients and decisions; launch scripts carry the user's words
@@ -2608,9 +2871,7 @@ def cmd_setup(_directory):
     for name in set(old_manifest.get("commands", [])) - set(COMMANDS):  # e.g. /standup before the rename
         (cmd_dir / name).unlink(missing_ok=True)
     for name in COMMANDS:
-        src = KIT / "commands" / ("en" if ui_lang() == "en" else "") / name  # re-run setup after changing "lang"
-        text = src.read_text(encoding="utf-8").replace("{CLI}", CLI)
-        (cmd_dir / name).write_text(text, encoding="utf-8")
+        install_command(cmd_dir, name)
     print(f"commands /forthmark /forthmark-add /forthmark-remove /forthmark-report in {cmd_dir}")
 
     write_json(MANIFEST, {

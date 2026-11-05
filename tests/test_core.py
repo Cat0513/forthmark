@@ -415,7 +415,7 @@ class Backups(unittest.TestCase):
         self.assertTrue((d / "settings.json.bak-mine").exists())
 
 
-class WeeklyReport(unittest.TestCase):
+class ReportFixture(unittest.TestCase):
     def setUp(self):
         self.repo = TMP / "周报 项目"
         self.repo.mkdir(exist_ok=True)
@@ -447,6 +447,8 @@ class WeeklyReport(unittest.TestCase):
         self.addCleanup(forthmark.REPORT_TEMPLATE.unlink, missing_ok=True)
         self.week = forthmark.report_week()
 
+
+class WeeklyReport(ReportFixture):
     def test_the_week_runs_monday_to_sunday(self):
         from datetime import date
         self.assertEqual(forthmark.report_week(today=date(2026, 11, 5)), (date(2026, 11, 2), date(2026, 11, 8)))
@@ -495,6 +497,172 @@ class WeeklyReport(unittest.TestCase):
         r = cli("report")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("做完的事", r.stdout)
+
+
+class WeeklyReportPage(ReportFixture):
+    def setUp(self):
+        super().setUp()
+        shutil.rmtree(forthmark.REPORTS, ignore_errors=True)
+        self.addCleanup(shutil.rmtree, forthmark.REPORTS, ignore_errors=True)
+        forthmark.REPORT_EXCLUDE.unlink(missing_ok=True)
+        self.addCleanup(forthmark.REPORT_EXCLUDE.unlink, missing_ok=True)
+        self.id = forthmark.report_id(self.week[0])
+
+    def write(self, text="1. 做完了"):
+        return forthmark.save_report(self.id, text, forthmark.report_entry(self.id).get("version"), False)
+
+    def test_week_ids_are_checked_before_they_name_a_file(self):
+        from datetime import date
+        self.assertEqual(forthmark.report_week_of("2026-W45"), (date(2026, 11, 2), date(2026, 11, 8)))
+        for bad in ("../../x", "2026-W99", "", None):
+            with self.assertRaises(forthmark.OpError):
+                forthmark.report_path(bad)
+
+    def test_states_follow_the_file_and_the_mark(self):
+        self.assertEqual(forthmark.report_entry(self.id)["state"], "unwritten")
+        self.assertEqual(self.write()["state"], "written")
+        self.assertEqual(forthmark.mark_report(self.id, "copied")["state"], "done")
+        self.assertEqual(forthmark.report_entry(self.id)["done_how"], "copied")
+        self.assertEqual(forthmark.mark_report(self.id, None)["state"], "written")
+        forthmark.mark_report(self.id, "marked")
+        time.sleep(0.01)
+        self.assertEqual(self.write("1. 又改了")["state"], "written", "changed text is no longer the version that was done")
+
+    def test_a_report_cant_be_marked_before_it_exists(self):
+        with self.assertRaises(forthmark.OpError):
+            forthmark.mark_report(self.id, "marked")
+
+    def test_an_edit_never_overwrites_a_version_the_user_hasnt_seen(self):
+        seen = self.write()["version"]
+        time.sleep(0.01)
+        forthmark.report_path(self.id).write_text("Agent 改的\n", encoding="utf-8")  # the agent, meanwhile
+        with self.assertRaises(forthmark.ReportConflict):
+            forthmark.save_report(self.id, "我改的", seen)
+        self.assertIn("Agent 改的", forthmark.report_entry(self.id)["text"])
+        with self.assertRaises(forthmark.ReportConflict):
+            forthmark.save_report(self.id, "我改的", None)  # opened when it didn't exist yet
+        self.assertIn("我改的", forthmark.save_report(self.id, "我改的", seen, force=True)["text"])
+
+    def test_an_empty_report_isnt_saved(self):
+        with self.assertRaises(forthmark.OpError):
+            forthmark.save_report(self.id, "  ")
+
+    def test_overview_pins_two_weeks_and_lists_the_rest_without_text(self):
+        self.write()
+        last = forthmark.report_id(forthmark.report_week(last=True)[0])
+        forthmark.report_path(last).write_text("上周的\n", encoding="utf-8")
+        forthmark.report_path("2020-W03").write_text("很久以前\n", encoding="utf-8")
+        (forthmark.REPORTS / "notes-Wxx.md").write_text("不是周报\n", encoding="utf-8")
+        o = forthmark.report_overview()
+        self.assertEqual(o["this"]["id"], self.id)
+        self.assertIn("上周的", o["last"]["text"])
+        self.assertEqual([e["id"] for e in o["older"]], ["2020-W03"])
+        self.assertNotIn("text", o["older"][0])
+
+    def test_material_carries_last_week_and_the_rules_expect_the_panel(self):
+        last = forthmark.report_id(forthmark.report_week(last=True)[0])
+        forthmark.REPORTS.mkdir(parents=True, exist_ok=True)
+        forthmark.report_path(last).write_text("上周的计划：做 X\n", encoding="utf-8")
+        text = forthmark.report_text(*self.week)
+        self.assertIn("上周的计划：做 X", text)
+        self.assertIn("重新读取", text)
+        material = forthmark.report_text(*self.week, material_only=True)
+        self.assertIn("做完的事", material)
+        self.assertNotIn("怎么写这份周报", material)
+
+    def test_an_existing_report_is_revised_not_rewritten(self):
+        self.assertNotIn("不要重写", forthmark.report_text(*self.week))
+        self.write()
+        self.assertIn("不要重写", forthmark.report_text(*self.week))
+
+    def test_excluded_projects_stay_out_and_arent_named(self):
+        name = self.repo.name
+        self.assertFalse(next(p for p in forthmark.report_projects(self.id)["projects"] if p["name"] == name)["excluded"])
+        forthmark.save_report_exclude({name, "另一个"})
+        self.assertTrue(next(p for p in forthmark.report_projects(self.id)["projects"] if p["name"] == name)["excluded"])
+        r = cli("report", f"--week={self.id}")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn(name, r.stdout)
+        self.assertNotIn("做完的事", r.stdout)
+        self.assertIn("排除了 1 个项目", r.stdout)
+
+    def start(self, cfg=None):
+        cfg = cfg or dict(forthmark.AGENT_PRESETS["claude"], terminal="auto")
+        with mock.patch.object(forthmark, "launch_agent") as launch, mock.patch.object(forthmark, "load_config", return_value=cfg):
+            result = forthmark.start_report(self.id)
+        return result, launch.call_args[0]
+
+    def test_writing_starts_with_the_request(self):
+        result, (path, command) = self.start()
+        self.assertEqual(path, forthmark.REPORTS)
+        self.assertTrue(command.startswith("claude "), command)
+        self.assertIn(f"report --week={self.id}", command)
+        self.assertFalse(result["resumed"])
+
+    def test_an_agent_command_we_dont_know_gets_the_request_by_paste(self):
+        result, launched = self.start({"agent": "my-agent --x", "terminal": "auto"})
+        self.assertIn(self.id, result["paste"])
+        self.assertEqual(launched, (forthmark.REPORTS,))
+
+    def test_revising_goes_back_to_the_conversation_and_says_nothing(self):
+        self.start()
+        self.write()
+        result, (_, command) = self.start()
+        self.assertEqual(command, "claude --continue")
+        self.assertTrue(result["resumed"])
+        self.assertFalse(result["updated"])
+
+    def test_a_changed_scope_is_passed_on_when_going_back(self):
+        self.start()
+        self.write()
+        self.assertIsNone(forthmark.report_overview()["scope_changed"])
+        forthmark.save_report_exclude({"别的项目"})
+        self.assertEqual(forthmark.report_overview()["scope_changed"], self.id)
+        result, (_, command) = self.start()
+        self.assertTrue(command.startswith("claude --continue "), command)
+        self.assertNotIn("别的项目", command)
+        self.assertIn(f"--week={self.id}", command)
+        self.assertTrue(result["updated"])
+        self.assertIsNone(forthmark.report_overview()["scope_changed"])
+        forthmark.save_report_template("按项目分组")
+        self.assertEqual(forthmark.report_overview()["scope_changed"], self.id)
+
+    def test_a_session_for_another_week_or_none_at_all_isnt_resumed(self):
+        self.write()  # written by hand: no session to go back to
+        self.assertFalse(self.start()[0]["resumed"])
+        forthmark.write_json(forthmark.REPORT_SESSION, {"week": "2020-W03", "scope": forthmark.report_scope()})
+        result, (_, command) = self.start()
+        self.assertFalse(result["resumed"])
+        self.assertNotIn("--continue", command)
+
+    def test_panel_says_unwritten_only_while_nothing_is_written(self):
+        self.assertTrue(forthmark.panel_payload()["report_unwritten"])
+        self.write()
+        self.assertFalse(forthmark.panel_payload()["report_unwritten"])
+
+
+class NewCommands(unittest.TestCase):
+    def test_a_service_start_adds_what_an_update_brought_and_nothing_else(self):
+        cmd_dir = forthmark.CLAUDE_DIR / "commands"
+        cmd_dir.mkdir(parents=True, exist_ok=True)
+        report = cmd_dir / "forthmark-report.md"
+        report.unlink(missing_ok=True)
+        saved = forthmark.MANIFEST.read_text(encoding="utf-8") if forthmark.MANIFEST.exists() else None
+        def restore():
+            report.unlink(missing_ok=True)
+            forthmark.MANIFEST.unlink(missing_ok=True)
+            if saved is not None:
+                forthmark.MANIFEST.write_text(saved, encoding="utf-8")
+        self.addCleanup(restore)
+        forthmark.MANIFEST.unlink(missing_ok=True)
+        forthmark.add_new_commands()
+        self.assertFalse(report.exists(), "never set up: leave Claude Code alone")
+        forthmark.write_json(forthmark.MANIFEST, {"commands": ["forthmark.md", "forthmark-add.md", "forthmark-remove.md"]})
+        (cmd_dir / "forthmark.md").unlink(missing_ok=True)
+        forthmark.add_new_commands()
+        self.assertTrue(report.exists())
+        self.assertFalse((cmd_dir / "forthmark.md").exists(), "a command the user removed stays removed")
+        self.assertIn("forthmark-report.md", json.loads(forthmark.MANIFEST.read_text(encoding="utf-8"))["commands"])
 
 
 class StoppedTracking(unittest.TestCase):
