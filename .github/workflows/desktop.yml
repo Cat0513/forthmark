@@ -31,6 +31,7 @@ jobs:
             for i in $(seq 60); do [ -f "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" ] && break; sleep 2; done &&
             sleep 5 &&
             node test/e2e.js &&
+            node test/scroll.js &&
             node test/smoke.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" &&
             node test/uninstall.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe"
           } 2>&1 | tee ../desktop.log

@@ -1310,8 +1310,19 @@ if (API) showScan(DATA.scan);
 if (hash.get("newproj") === "1" && API) setTimeout(newProjectDialog, 50);  // opened from the popover's "＋"
 // The page scrolls (wide) or .scroller does (narrow); scroll events don't bubble, so listen in capture.
 document.addEventListener("scroll", e => {
-  const y = e.target === document ? scrollY : e.target.scrollTop || 0;
-  document.documentElement.classList.toggle("scrolled", y > 24);
+  const el = e.target === document ? document.scrollingElement : e.target;
+  if (e.target !== document && !e.target.classList?.contains("scroller")) return;  // not the project chips, a preview…
+  const root = document.documentElement, y = el.scrollTop;
+  if (root.classList.contains("scrolled")) {
+    if (y <= 8) root.classList.remove("scrolled");
+    return;
+  }
+  if (y <= 24) return;
+  // Hiding the goal shortens the page. Only collapse if that leaves room to stay scrolled: otherwise the browser
+  // pulls the position back, which opens it again, and a page barely taller than the window flickers forever.
+  const goal = document.querySelector(".topbar .goal");
+  const cost = goal ? goal.offsetHeight + (parseFloat(getComputedStyle(goal.parentElement.parentElement).rowGap) || 10) + 10 : 0;
+  if (el.scrollHeight - el.clientHeight - cost > 24) root.classList.add("scrolled");
 }, { capture: true, passive: true });
 if (state.doc && API) openDoc(state.doc);
 // "New since you last looked": only counts as seen after the page has been visible for a while,
