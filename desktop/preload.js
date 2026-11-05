@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld("webkit", {
 contextBridge.exposeInMainWorld("forthmarkDialogs", {
   alert: text => ipcRenderer.sendSync("dialog-alert", String(text)),
   confirm: text => ipcRenderer.sendSync("dialog-confirm", String(text)),
+  pickFolder: () => ipcRenderer.invoke("pick-folder"),
 });
 webFrame.executeJavaScript("window.alert = forthmarkDialogs.alert; window.confirm = forthmarkDialogs.confirm;");

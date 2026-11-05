@@ -289,6 +289,19 @@ ipcMain.on("dialog-confirm", (e, text) => {
   e.returnValue = modal(e, { message: String(text), buttons: [L("确定", "OK"), L("取消", "Cancel")], defaultId: 0, cancelId: 1 }) === 0;
 });
 
+ipcMain.handle("pick-folder", async e => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  modalOpen = true;
+  try {
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, { title: L("选择项目文件夹", "Choose the project folder"), properties: ["openDirectory"] });
+    return canceled ? null : filePaths[0];
+  } finally {
+    modalOpen = false;
+    ignoreBlurUntil = Date.now() + 300;
+    win?.focus();
+  }
+});
+
 // ---------------------------------------------------------------- notifications
 
 function post(title, body) {

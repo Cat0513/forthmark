@@ -154,7 +154,7 @@ def git_root(path):
         out = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=path, capture_output=True,
                              encoding="utf-8", errors="replace", timeout=5, check=True).stdout.strip()
         return Path(out).resolve() if out else None
-    except (subprocess.SubprocessError, FileNotFoundError, NotADirectoryError):
+    except (subprocess.SubprocessError, OSError):
         return None
 
 
@@ -1397,6 +1397,23 @@ def create_project(name, directory="", goal="", adopt=False):
     return pid
 
 
+def adopt_project(directory):
+    """Track a folder that already exists and open the agent in it. Unlike a new project it gets no
+    git init and no new folders: nothing is written into it, and a mistyped path is just an error."""
+    raw = directory.strip().strip('"\'')
+    if not raw:
+        raise OpError(L("请选择或输入文件夹路径", "Choose or type a folder path"))
+    path = Path(os.path.expanduser(raw)).resolve()
+    if not path.is_dir():
+        raise OpError(L("找不到这个文件夹：", "No such folder: ") + str(path))
+    path = git_root(path) or path
+    pid, created = register_project(path)
+    if created:
+        apply_op(pid, "note", {"text": L("从面板接入项目：", "Tracked from the panel: ") + str(path)}, source="")
+    launch_agent(path)
+    return pid
+
+
 SESSION_MODES = {"new": ("开了一个新会话", "Started a new session"), "last": ("回到了最近的会话", "Resumed the most recent session"),
                  "pick": ("打开了会话列表", "Opened the session picker")}
 
@@ -1990,6 +2007,10 @@ def make_handler(token):
                     pid = create_project(a.get("name", ""), a.get("dir", ""), a.get("goal", ""), a.get("adopt") in ("1", True))
                     render_panel()
                     return self.send(200, json.dumps({"ok": True, "text": L("已创建，agent 已在终端里打开，等你说第一句话", "Created; your agent is open in the terminal, waiting for your first message"), "project": pid}, ensure_ascii=False))
+                if req.get("op") == "adopt_project":
+                    pid = adopt_project(req.get("args", {}).get("dir", ""))
+                    render_panel()
+                    return self.send(200, json.dumps({"ok": True, "project": pid, "text": L("已接入，agent 已在终端里打开，等你说第一句话", "Tracked; your agent is open in the terminal, waiting for your first message")}, ensure_ascii=False))
                 if req.get("op") == "untrack_project":
                     untrack_project(req["project"])
                     render_panel()

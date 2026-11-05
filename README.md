@@ -83,7 +83,7 @@ Requires Windows 10/11 (64-bit), Git and Claude Code. Python is bundled and admi
 
 1. Download `Forthmark-Setup-*.exe` from [Releases](https://github.com/Cat0513/forthmark/releases/latest) and run it.
 2. The installer isn't code-signed yet, so Windows SmartScreen may warn you: choose **More info**, then **Run anyway**.
-3. Forthmark connects to Claude Code on first launch and opens the panel. If you don't see its tray icon, look under `^` in the taskbar. Left-click opens the panel, right-click the menu (launch at login, test notification, quit).
+3. Forthmark connects to Claude Code on first launch and opens the panel. If you don't see its tray icon, look under `^` in the taskbar. Left-click opens the panel, right-click the menu (launch at login, test notification, quit). Start from the panel: create a new project or track an existing folder.
 
 Uninstall it from Windows Settings → Apps: the hooks come out of Claude Code, and your status data in `~\.forthmark` is kept.
 

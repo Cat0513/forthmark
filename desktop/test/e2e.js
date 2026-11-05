@@ -39,6 +39,14 @@ const step = name => console.log(`ok - ${name}`);
     assert.ok(await pop.evaluate(async () => (await fetch("/api/ping")).ok));
     step("popover renders the panel with the native bridge");
 
+    await pop.click("#adoptproj");
+    await pop.waitForSelector("#pickdir");
+    await pop.click(".modal [data-close]");
+    await pop.click("#newproj");
+    await pop.click("#toadopt");
+    await pop.click(".modal [data-close]");
+    step("with no projects, the panel offers new project and existing folder");
+
     const visible = () => app.evaluate(() => globalThis.forthmarkTest.popover().isVisible());
     await app.evaluate(() => globalThis.forthmarkTest.panelWindow()?.hide());
     await app.evaluate(() => globalThis.forthmarkTest.showPopover());

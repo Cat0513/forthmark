@@ -87,7 +87,7 @@ git clone https://github.com/Cat0513/forthmark.git && cd forthmark
 
 1. 从 [Releases](https://github.com/Cat0513/forthmark/releases/latest) 下载 `Forthmark-Setup-*.exe` 并运行。
 2. 安装包暂未做代码签名，Windows SmartScreen 可能会提示风险：点“更多信息”，再点“仍要运行”。
-3. 首次启动会自动接入 Claude Code 并打开面板。如果看不到托盘图标，到任务栏的 `^` 里找。左键打开面板，右键打开菜单（开机自启、测试通知、退出）。
+3. 首次启动会自动接入 Claude Code 并打开面板。如果看不到托盘图标，到任务栏的 `^` 里找。左键打开面板，右键打开菜单（开机自启、测试通知、退出）。可以直接在面板上新建项目或接入已有文件夹。
 
 在 Windows“设置 → 应用”里卸载：会从 Claude Code 中移除 hook，`~\.forthmark` 里的状态数据会保留。
 

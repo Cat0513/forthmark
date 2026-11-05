@@ -65,6 +65,12 @@
 :root.glass, :root.glass body { background: transparent; }
 :root.glass .card { backdrop-filter: saturate(170%) blur(14px); -webkit-backdrop-filter: saturate(170%) blur(14px); }
 :root.glass .tabs { background: rgba(127,127,127,.12); border-color: transparent; }
+.empty-start { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.empty-start h2 { margin: 0; font-size: 15px; }
+.empty-start .starts { display: flex; flex-wrap: wrap; gap: 8px; }
+.empty-start .faint { font-size: 12px; }
+.pathrow { display: flex; gap: 6px; }
+.pathrow input { flex: 1; min-width: 0; }
 .scanbar { position: fixed; left: 8px; bottom: 6px; z-index: 40; max-width: calc(100vw - 16px); padding: 2px 8px; border-radius: 6px;
   font-size: 11px; color: var(--ink2); background: var(--card); border: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 .scanbar[hidden] { display: none; }
@@ -473,8 +479,12 @@ function render() {
   app.dataset.tab = state.tab;
   const projects = DATA.projects;
   if (!projects.length) {
-    app.innerHTML = `<div class="card"><h2 style="margin:0 0 6px;font-size:15px">${L("还没有跟踪任何项目", "No projects tracked yet")}</h2>
-      <div class="muted">${L(`在项目里打开 Claude Code，输入 <span class="mono">/forthmark-add</span> 即可接入（不会改动项目里的任何文件）。`, `Open Claude Code in a project and type <span class="mono">/forthmark-add</span> (nothing in the project is changed).`)}</div></div>`;
+    app.innerHTML = `<div class="card empty-start"><h2>${L("还没有跟踪任何项目", "No projects tracked yet")}</h2>
+      ${API ? `<div class="muted">${L("选一种方式开始，都不会改动项目里已有的文件。", "Pick a way to start. Neither changes the files already in a project.")}</div>
+      <div class="starts"><button class="act primary" id="newproj">${L("＋ 新建项目", "＋ New project")}</button><button class="act" id="adoptproj">${L("接入已有文件夹", "Track an existing folder")}</button></div>
+      <div class="faint">${L(`也可以在项目里打开 Claude Code，输入 <span class="mono">/forthmark-add</span>。`, `Or open Claude Code in a project and type <span class="mono">/forthmark-add</span>.`)}</div>`
+      : `<div class="muted">${L(`在项目里打开 Claude Code，输入 <span class="mono">/forthmark-add</span> 即可接入（不会改动项目里的任何文件）。`, `Open Claude Code in a project and type <span class="mono">/forthmark-add</span> (nothing in the project is changed).`)}</div>`}</div>`;
+    if (NATIVE && SHELL === "popover") NATIVE.postMessage({ action: "resize", height: 260 });
     return;
   }
   const P = projects.find(p => p.id === state.project) || projects[0];
@@ -879,7 +889,7 @@ function newProjectDialog() {
     <label>${L("位置", "Location")}<input type="text" name="dir" value="${esc(base)}/"></label>
     <label>${L("目标（可选，显示在面板上）", "Goal (optional, shown on the panel)")}<input type="text" name="goal" placeholder="${L("一句话说明要做成什么，比如：每天打卡、每周看到进步", "What it should become, in one line, e.g. log workouts daily, see progress weekly")}"></label>
     <div class="hint">${L(`会创建文件夹${DATA.config?.git_init ? "并 git init" : ""}、接入跟踪，然后在 ${esc(DATA.config?.terminal_name || "终端")} 里打开 ${esc(DATA.config?.agent || "claude")}，第一句话由你来说。`, `Creates the folder${DATA.config?.git_init ? " (git init)" : ""}, tracks it, then opens ${esc(DATA.config?.agent || "claude")} in ${esc(DATA.config?.terminal_name || "a terminal")}. You type the first message.`)}</div>
-    <div class="row2"><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("创建并打开", "Create and open")}</button></div>
+    <div class="row2"><button type="button" class="act" id="toadopt" style="margin-right:auto">${L("接入已有文件夹", "Track an existing folder")}</button><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("创建并打开", "Create and open")}</button></div>
   </form>`;
   document.body.appendChild(m);
   const f = m.querySelector("form"), name = f.elements.name, dir = f.elements.dir;
@@ -887,7 +897,10 @@ function newProjectDialog() {
   dir.addEventListener("input", () => dirTouched = true);
   name.addEventListener("input", () => { if (!dirTouched) dir.value = `${base}/${name.value.trim()}`; });
   const close = () => m.remove();
-  m.addEventListener("click", e => { if (e.target === m || e.target.closest("[data-close]")) close(); });
+  m.addEventListener("click", e => {
+    if (e.target === m || e.target.closest("[data-close]")) close();
+    if (e.target.id === "toadopt") { close(); adoptProjectDialog(); }
+  });
   f.addEventListener("submit", async e => {
     e.preventDefault();
     const args = { name: name.value.trim(), dir: dir.value.trim(), goal: f.elements.goal.value.trim() };
@@ -903,6 +916,41 @@ function newProjectDialog() {
   });
   setTimeout(() => name.focus(), 30);
   makeRoom(m, 560);
+}
+
+function adoptProjectDialog() {
+  const pick = window.forthmarkDialogs?.pickFolder;
+  const m = document.createElement("div");
+  m.className = "modal";
+  m.innerHTML = `<form>
+    <h3>${L("接入已有文件夹", "Track an existing folder")}</h3>
+    <label>${L("文件夹路径", "Folder path")}<span class="pathrow"><input type="text" name="dir" placeholder="${L("项目文件夹的完整路径", "Full path of the project folder")}" autofocus required>${pick ? `<button type="button" class="act" id="pickdir">${L("浏览…", "Browse…")}</button>` : ""}</span></label>
+    <div class="hint">${L(`不会改动文件夹里的任何文件。接入后会在 ${esc(DATA.config?.terminal_name || "终端")} 里打开 ${esc(DATA.config?.agent || "claude")}，第一句话由你来说。`, `Nothing in the folder is changed. ${esc(DATA.config?.agent || "claude")} then opens in ${esc(DATA.config?.terminal_name || "a terminal")}; the first message is yours.`)}</div>
+    <div class="row2"><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("接入并打开", "Track and open")}</button></div>
+  </form>`;
+  document.body.appendChild(m);
+  const f = m.querySelector("form"), dir = f.elements.dir, close = () => m.remove();
+  m.addEventListener("click", async e => {
+    if (e.target === m || e.target.closest("[data-close]")) return close();
+    if (e.target.id === "pickdir") {
+      const chosen = await pick();
+      if (chosen) dir.value = chosen;
+    }
+  });
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    const submit = f.querySelector('[type="submit"]'), label = submit.textContent;
+    submit.disabled = true;
+    submit.textContent = L("接入中…", "Tracking…");
+    const res = await fetch("/api/op", { method: "POST", headers: { "Content-Type": "application/json", "X-Forthmark-Token": API.token },
+      body: JSON.stringify({ op: "adopt_project", args: { dir: dir.value } }) }).then(r => r.json()).catch(e => ({ ok: false, error: String(e) }));
+    submit.disabled = false;
+    submit.textContent = label;
+    if (!res.ok) return toast(L("没有成功：", "Didn't work: ") + res.error);
+    close(); toast(res.text); state.project = res.project; await refresh(); render();
+  });
+  setTimeout(() => dir.focus(), 30);
+  makeRoom(m, 360);
 }
 
 // In the popover make room for a dialog; give the size back when it closes.
@@ -1088,6 +1136,7 @@ document.addEventListener("click", e => {
   }
   if (b.id === "theme") return toggleTheme();
   if (b.id === "newproj") return newProjectDialog();
+  if (b.id === "adoptproj") return adoptProjectDialog();
   if (b.dataset.untrack) {
     if (confirm(L(`停止跟踪「${curProject().status.project.name}」？\n项目文件和状态记录都保留，之后可以重新接入。`, `Stop tracking "${curProject().status.project.name}"?\nIts files and status data are kept; you can track it again later.`))) op("untrack_project", {});
     return;

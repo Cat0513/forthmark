@@ -235,6 +235,37 @@ class Project(unittest.TestCase):
                 forthmark.create_project('a:b')
 
 
+class Adopt(unittest.TestCase):
+    def test_tracks_an_existing_folder_without_writing_into_it(self):
+        repo = TMP / "已有 项目"
+        repo.mkdir(exist_ok=True)
+        (repo / "a.txt").write_text("a", encoding="utf-8")
+        with mock.patch.object(forthmark, "launch_agent") as launch:
+            pid = forthmark.adopt_project(f'"{repo}"')
+        self.addCleanup(cli, "remove", str(repo))
+        launch.assert_called_once()
+        self.assertIn(pid, forthmark.load_registry()["projects"])
+        self.assertEqual([p.name for p in repo.iterdir()], ["a.txt"])  # above all, no .git
+
+    def test_a_subfolder_of_a_repository_tracks_the_repository(self):
+        repo = TMP / "仓库"
+        (repo / "子目录").mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        with mock.patch.object(forthmark, "launch_agent"):
+            pid = forthmark.adopt_project(str(repo / "子目录"))
+        self.addCleanup(cli, "remove", str(repo))
+        self.assertEqual(Path(forthmark.load_registry()["projects"][pid]["path"]).name, "仓库")
+
+    def test_bad_paths_are_errors_and_create_nothing(self):
+        missing = TMP / "打错的路径"
+        with mock.patch.object(forthmark, "launch_agent") as launch:
+            for bad in ("", str(missing), str(Path.home())):
+                with self.assertRaises(forthmark.OpError):
+                    forthmark.adopt_project(bad)
+        launch.assert_not_called()
+        self.assertFalse(missing.exists())
+
+
 class SetupFailures(unittest.TestCase):
     def test_corrupt_settings_are_left_alone(self):
         d = TMP / "claude-bad"
