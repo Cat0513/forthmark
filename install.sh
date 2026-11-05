@@ -24,7 +24,7 @@ say()  { print -P "%B==>%b $*"; }
 warn() { print -P "%F{yellow}!%f $*"; }
 fail() { print -P "%F{red}✗%f $*"; exit 1; }
 
-[[ $(uname) == Darwin ]] || fail "目前只支持 macOS（Windows 预览版在计划中）"
+[[ $(uname) == Darwin ]] || fail "这个脚本只用于 macOS；Windows 请用 install.ps1"
 
 # The agent runs `python3 …/forthmark.py`, so python3 on PATH is the one that has to work.
 command -v python3 >/dev/null || fail "找不到 python3。安装 Xcode 命令行工具（xcode-select --install）或 Homebrew 的 python 后再运行"

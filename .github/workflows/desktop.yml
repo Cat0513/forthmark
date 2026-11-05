@@ -1,0 +1,61 @@
+name: desktop
+on:
+  push:
+    branches: ["windows-*"]
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Build, install, test, uninstall
+        shell: bash
+        working-directory: desktop
+        run: |
+          set -o pipefail
+          {
+            npm ci &&
+            npm test &&
+            npm run dist &&
+            ls -l dist/*.exe &&
+            ./dist/Forthmark-Setup-*.exe //S &&
+            for i in $(seq 60); do [ -f "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" ] && break; sleep 2; done &&
+            sleep 5 &&
+            node test/e2e.js &&
+            node test/smoke.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" &&
+            node test/uninstall.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe"
+          } 2>&1 | tee ../desktop.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Forthmark-Setup
+          path: desktop/dist/Forthmark-Setup-*.exe
+          if-no-files-found: ignore
+      - if: failure()
+        shell: bash
+        run: |
+          node -e "
+          const t = require('fs').readFileSync('desktop.log', 'utf8').slice(-3500);
+          console.log('::error::' + t.replace(/%/g, '%25').replace(/\r/g, '').replace(/\n/g, '%0A'));"
+  # A version tag makes a draft release; a person reads it and publishes it.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Forthmark-Setup
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" Forthmark-Setup-*.exe --repo "$GITHUB_REPOSITORY" --draft --title "$GITHUB_REF_NAME" --notes "Windows preview. See the README for install steps."

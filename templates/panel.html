@@ -65,6 +65,10 @@
 :root.glass, :root.glass body { background: transparent; }
 :root.glass .card { backdrop-filter: saturate(170%) blur(14px); -webkit-backdrop-filter: saturate(170%) blur(14px); }
 :root.glass .tabs { background: rgba(127,127,127,.12); border-color: transparent; }
+.scanbar { position: fixed; left: 8px; bottom: 6px; z-index: 40; max-width: calc(100vw - 16px); padding: 2px 8px; border-radius: 6px;
+  font-size: 11px; color: var(--ink2); background: var(--card); border: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.scanbar[hidden] { display: none; }
+.syswarn { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-bottom: 12px; border-color: var(--amber-line); }
 /* popover density: tighter spacing, one-line goal */
 :root.glass .app { gap: 10px; padding-top: 14px; }
 :root.glass .scroller { gap: 9px; padding-bottom: 12px; }
@@ -506,13 +510,14 @@ function render() {
         <button class="iconbtn ghost" data-session="new" title="${L(`新会话：在终端里开一个新的 ${esc(DATA.config?.agent || "claude")} 会话（会拿到项目的当前状态）`, `New session: start ${esc(DATA.config?.agent || "claude")} in a terminal (it receives the project status)`)}">＋</button>
         <button class="iconbtn ghost go" data-session="last" title="${L(`继续：回到最近的会话（由 ${esc(DATA.config?.agent || "claude")} 自己判断哪个最近）`, `Continue: the most recent session (${esc(DATA.config?.agent || "claude")} decides which)`)}">▶</button>
         <button class="iconbtn ghost" data-session="pick" title="${L(`会话列表：用 ${esc(DATA.config?.agent || "claude")} 自己的列表选一个会话`, `Sessions: pick one from ${esc(DATA.config?.agent || "claude")}'s own list`)}">☰</button>
+        <button class="iconbtn ghost" data-untrack="1" title="${L("停止跟踪这个项目（项目文件和状态记录都保留）", "Stop tracking this project (its files and status data are kept)")}">⊘</button>
       </span>` : ""}
       <span class="pulse" style="--c:${pulse.c}"><span class="dot ${pulse.live ? "live" : ""}"></span><b style="color:${pulse.c}">${pulse.label}</b>
         <span class="faint">${L("最近推进", "last progress")} <span data-ago="${P.last_activity}">${ago(P.last_activity)}</span></span></span>
       ${P.usage?.total ? `<span class="pulse cost" title="${L(`因本工具拦截而多出的轮次：${fmtTok(P.usage.overhead)} tokens（精确）\n+ 未计入：会话开始注入的规则与状态、agent 日常更新状态的少量开销\n本项目会话共 ${fmtTok(P.usage.total)} tokens（只算新增 token，不含缓存读取）`, `Extra turns caused by this tool: ${fmtTok(P.usage.overhead)} tokens (exact)\n+ not counted: rules and status injected at session start, the agent's routine status updates\nAll sessions in this project: ${fmtTok(P.usage.total)} tokens (new tokens only, no cache reads)`)}">
         <span class="faint">${L("工具开销", "tool overhead")}</span> <b>${fmtTok(P.usage.overhead)}+</b> <span class="faint">· ${(P.usage.overhead * 100 / P.usage.total).toFixed(1)}%</span></span>` : ""}
       ${!NATIVE ? `<button class="iconbtn" id="theme" title="${L("切换深浅色", "Toggle light / dark")}">◐</button>`
-        : SHELL === "popover" ? `<button class="iconbtn ghost" id="expand" title="${L("在窗口中打开（⌥ 点击菜单栏图标也可以）", "Open in a window (or ⌥-click the menu bar icon)")}">${EXPAND_ICON}</button>` : ""}</div>
+        : SHELL === "popover" ? `<button class="iconbtn ghost" id="expand" title="${/Mac/.test(navigator.platform) ? L("在窗口中打开（⌥ 点击菜单栏图标也可以）", "Open in a window (or ⌥-click the menu bar icon)") : L("在窗口中打开", "Open in a window")}">${EXPAND_ICON}</button>` : ""}</div>
     ${S.project.goal ? `<div class="goal">${esc(S.project.goal)}</div>` : ""}${chips}</div>`;
   const tabs = `<div class="tabs">${[["overview", L("总览", "Overview")], ["board", L("任务", "Tasks")], ["feed", L("动态", "Activity")], ["docs", L("文档", "Docs")]].map(([k, l]) =>
     `<button data-tab="${k}" class="${state.tab === k ? "on" : ""}">${l}</button>`).join("")}</div>`;
@@ -751,7 +756,8 @@ function render() {
     ${sources.length ? `<div class="dgrp">${L("进度来源 · agent 的进度记录，面板上的状态由它们提炼", "Progress sources · the agent's progress notes the status is distilled from")}</div><div class="sources">${sources.map(docRow).join("")}</div>` : ""}
     ${pinned.length ? `<div class="dgrp">★ ${L("置顶", "Pinned")}</div>${pinned.map(docRow).join("")}` : ""}
     <div class="doccols">${groups}</div>
-    ${!shownDocs.length ? `<div class="empty">${allDocs.length ? L("没有匹配的文档", "No matching docs") : L("没有发现文档", "No docs found")}</div>` : ""}
+    ${!shownDocs.length ? `<div class="empty">${allDocs.length ? L("没有匹配的文档", "No matching docs") : P.docs_scanning ? L("正在扫描文档…", "Scanning for documents…") : L("没有发现文档", "No docs found")}</div>` : ""}
+    ${P.docs_complete === false ? `<div class="faint" style="font-size:11px;margin-top:8px">${L("这个文件夹文件太多，只显示已找到的部分文档", "This folder has too many files; showing the documents found so far")}</div>` : ""}
     ${(P.docs_missing || []).length ? `<div class="dgrp">${L("找不到的文件（之前加过标记）", "Missing files (previously annotated)")}</div>${P.docs_missing.map(d =>
       `<div class="doc"><span class="ic">?</span><div class="main"><div class="nm">${esc(d.path)}</div><div class="ds">${esc(d.note || (d.tags || []).join(L("、", ", ")))}</div></div>
        ${API ? `<button class="mini" data-forget="${esc(d.path)}">${L("清除", "Clear")}</button>` : ""}</div>`).join("")}` : ""}
@@ -760,7 +766,10 @@ function render() {
   const footer = `<div class="footer"><span>${L("状态更新于", "Status updated")} <span data-ago="${S.updated_at}">${ago(S.updated_at)}</span> · ${L("面板生成于", "panel built at")} ${DATA.generated_at.slice(11, 16)} · ${API ? `<span style="color:var(--green)">${L("● 已连接，可直接在面板上操作", "● Connected: act right from the panel")}</span>` : L("静态页 · 运行 <span class=\"mono\">forthmark.py open</span> 可在面板上直接操作", "Static page · run <span class=\"mono\">forthmark.py open</span> to act from the panel")}</span>
     <span class="mono">${esc(P.path.replace(/^\/Users\/[^/]+/, "~"))}</span></div>`;
 
-  patch(app, `<div class="topbar">${head}${tabs}</div><div class="scroller">` + `<div class="panes ${openW.length > 3 ? "manywait" : ""}">${where}${wait}${next}${cad}<div class="mainL">${board}${state.bugsLeft ? bugs : ""}</div><div class="side">${feed}${state.bugsLeft ? "" : bugs}</div>${docsCard}</div>` + footer + `</div>`);
+  const sysWarn = P.system_dir ? `<section class="card syswarn"><b>${L("这是系统目录或用户主目录，不是项目", "This is a system or home folder, not a project")}</b>
+    <div class="faint">${L("Forthmark 不会扫描这里的文档。", "Forthmark doesn't scan it for documents.")} <span class="mono">${esc(P.path)}</span></div>
+    ${API ? `<button class="act" data-untrack="1">${L("停止跟踪", "Stop tracking")}</button>` : ""}</section>` : "";
+  patch(app, `<div class="topbar">${head}${tabs}</div><div class="scroller">` + sysWarn + `<div class="panes ${openW.length > 3 ? "manywait" : ""}">${where}${wait}${next}${cad}<div class="mainL">${board}${state.bugsLeft ? bugs : ""}</div><div class="side">${feed}${state.bugsLeft ? "" : bugs}</div>${docsCard}</div>` + footer + `</div>`);
   saveState();
   fitPopover();
   balanceColumns();
@@ -882,8 +891,13 @@ function newProjectDialog() {
   f.addEventListener("submit", async e => {
     e.preventDefault();
     const args = { name: name.value.trim(), dir: dir.value.trim(), goal: f.elements.goal.value.trim() };
-    const res = await (await fetch("/api/op", { method: "POST", headers: { "Content-Type": "application/json", "X-Forthmark-Token": API.token },
-      body: JSON.stringify({ op: "create_project", args }) })).json();
+    const submit = f.querySelector('[type="submit"]'), label = submit.textContent;
+    submit.disabled = true;
+    submit.textContent = L("创建中…", "Creating…");
+    const res = await fetch("/api/op", { method: "POST", headers: { "Content-Type": "application/json", "X-Forthmark-Token": API.token },
+      body: JSON.stringify({ op: "create_project", args }) }).then(r => r.json()).catch(e => ({ ok: false, error: String(e) }));
+    submit.disabled = false;
+    submit.textContent = label;
     if (!res.ok) return toast(L("没有成功：", "Didn't work: ") + res.error);
     close(); toast(res.text); state.project = res.project; await refresh(); render();
   });
@@ -1074,6 +1088,10 @@ document.addEventListener("click", e => {
   }
   if (b.id === "theme") return toggleTheme();
   if (b.id === "newproj") return newProjectDialog();
+  if (b.dataset.untrack) {
+    if (confirm(L(`停止跟踪「${curProject().status.project.name}」？\n项目文件和状态记录都保留，之后可以重新接入。`, `Stop tracking "${curProject().status.project.name}"?\nIts files and status data are kept; you can track it again later.`))) op("untrack_project", {});
+    return;
+  }
   if (b.dataset.session) return op("open_session", { mode: b.dataset.session });
   if (b.id === "expand") return NATIVE?.postMessage({ action: "openPanel" });
   if (b.dataset.project) { state.project = b.dataset.project; state.filter = "all"; return render(); }
@@ -1137,13 +1155,41 @@ async function refresh() {
     if (r.status === 403) return location.reload();  // the service restarted with a new token
     if (!r.ok) return;
     const next = await r.json();
+    if (next.scan) showScan(next.scan);
     const sig = d => JSON.stringify(d.projects);
     if (sig(next) !== sig(DATA)) { DATA = next; pendingRender = true; }
     if (pendingRender && !typing()) { pendingRender = false; render(); refreshDrawer(); }  // deferred while typing
   } catch (e) {}
 }
 
+// The IDE-style status line: only while a folder is being scanned in the background.
+const scanBar = document.createElement("div");
+scanBar.className = "scanbar";
+scanBar.hidden = true;
+document.body.appendChild(scanBar);
+let scanTimer = null;
+function showScan(scan) {
+  scanBar.hidden = !scan;
+  if (scan) {
+    const n = scan.checked ? L(` · 已检查 ${scan.checked.toLocaleString()} 个文件`, ` · ${scan.checked.toLocaleString()} files checked`) : "";
+    const more = scan.queued ? L(`（还有 ${scan.queued} 个项目）`, ` (${scan.queued} more)`) : "";
+    scanBar.textContent = L("正在扫描文档：", "Scanning documents: ") + scan.name + n + more;
+  }
+  if (scan && !scanTimer) scanTimer = setTimeout(pollScan, 1000);
+}
+async function pollScan() {
+  scanTimer = null;
+  let scan = null;
+  try {
+    const r = await fetch("/api/scan", { headers: { "X-Forthmark-Token": API.token } });
+    if (r.ok) scan = await r.json();
+  } catch (e) {}
+  showScan(scan);
+  if (!scan) refresh();  // done: bring in what it found
+}
+
 render();
+if (API) showScan(DATA.scan);
 if (hash.get("newproj") === "1" && API) setTimeout(newProjectDialog, 50);  // opened from the popover's "＋"
 // The page scrolls (wide) or .scroller does (narrow); scroll events don't bubble, so listen in capture.
 document.addEventListener("scroll", e => {

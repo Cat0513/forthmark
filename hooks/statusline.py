@@ -15,9 +15,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
-def data_home():
-    return Path(os.environ.get("FORTHMARK_HOME") or "~/.forthmark").expanduser()
-
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+from fmshared import data_home, inside, utf8_stdio  # noqa: E402
 
 HOME = data_home()
 DIM, AMBER, RED, RESET = "\033[2m", "\033[33m", "\033[31m", "\033[0m"
@@ -69,9 +68,7 @@ def project_for(cwd):
         projects = json.loads((HOME / "registry.json").read_text(encoding="utf-8"))["projects"]
     except (OSError, ValueError, KeyError):
         return None
-    cwd = os.path.realpath(cwd)
-    hits = [(pid, e) for pid, e in projects.items()
-            if cwd == e["path"] or cwd.startswith(e["path"].rstrip("/") + "/")]
+    hits = [(pid, e) for pid, e in projects.items() if inside(cwd, e["path"])]
     return max(hits, key=lambda h: len(h[1]["path"]))[0] if hits else None
 
 
@@ -128,13 +125,14 @@ def previous_line(raw):
     if not prev:
         return ""
     try:
-        r = subprocess.run(prev, shell=True, input=raw, capture_output=True, text=True, timeout=2)
+        r = subprocess.run(prev, shell=True, input=raw, capture_output=True, encoding="utf-8", errors="replace", timeout=2)
         return r.stdout.splitlines()[0] if r.stdout else ""
     except (subprocess.SubprocessError, OSError):
         return ""
 
 
 def main():
+    utf8_stdio()
     raw = sys.stdin.read()
     try:
         data = json.loads(raw) if raw.strip() else {}

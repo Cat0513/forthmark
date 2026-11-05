@@ -13,7 +13,7 @@
 
 Full introduction (summary, design principles, features, non-goals, who it's for): [docs/introduction.md](docs/introduction.md)
 
-> **Early preview (v0.1):** **macOS + Claude Code (CLI)**, in English and Chinese. Windows preview is on the roadmap. See [Scope and limits](#scope-and-limits).
+> **Early preview (v0.1):** **macOS + Claude Code (CLI)**, in English and Chinese. A Windows preview with a tray app is available. See [Scope and limits](#scope-and-limits).
 
 - Your project's markdown stays the agent's working material; the agent additionally keeps a **status written for humans**: progress, next step, waiting items, bugs, decisions, timeline.
 - **Zero intrusion:** nothing is written into your projects and their git is only read (`git status` / `git log`). All data lives in `~/.forthmark/`.
@@ -76,6 +76,28 @@ Install backs up `~/.claude/settings.json` first, then adds:
 In untracked projects the hooks check the registry and exit without doing anything.
 
 To install or remove parts separately: `python3 tools/forthmark.py setup` / `teardown`, `zsh tools/build_app.sh --install`.
+
+## Install on Windows (preview)
+
+Requires Windows 10/11 (64-bit), Git and Claude Code. Python is bundled and administrator rights aren't needed.
+
+1. Download `Forthmark-Setup-*.exe` from [Releases](https://github.com/Cat0513/forthmark/releases/latest) and run it.
+2. The installer isn't code-signed yet, so Windows SmartScreen may warn you: choose **More info**, then **Run anyway**.
+3. Forthmark connects to Claude Code on first launch and opens the panel. If you don't see its tray icon, look under `^` in the taskbar. Left-click opens the panel, right-click the menu (launch at login, test notification, quit).
+
+Uninstall it from Windows Settings → Apps: the hooks come out of Claude Code, and your status data in `~\.forthmark` is kept.
+
+Prefer the command line? You'll need Python 3.9+ ([python.org](https://www.python.org/downloads/windows/), with "Add python.exe to PATH" ticked). This gives you recording and the browser panel, without the tray app or notifications:
+
+```powershell
+git clone https://github.com/Cat0513/forthmark.git; cd forthmark
+powershell -ExecutionPolicy Bypass -File .\install.ps1                # hooks + status line + /forthmark commands
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -NoStatusline  # leave Claude Code's status line alone
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall     # undo everything (status data in ~\.forthmark is kept)
+python tools\forthmark.py open                                        # open the panel in your browser
+```
+
+Sessions open in Windows Terminal or PowerShell.
 
 ## Menu bar app (recommended)
 
@@ -215,7 +237,7 @@ Command-line agents (Claude Code, Codex CLI, …) are supported; GUI clients may
 | Codex CLI / Cursor etc. | ⚠️ Only the "new project / open session" shortcuts (commands are configurable); no hooks, so recording waits for the MCP entry point |
 | Terminals | Ghostty, macOS Terminal; more later |
 | Language | English and Chinese, following the macOS language (`lang` in config.json to override). What agents record is in your own language |
-| Windows | 🗓 Planned after v0.1 (core recording + hooks + browser panel + status line) |
+| Windows 10/11 | 🧪 Preview: installer with bundled Python, tray app, panel windows, notifications, launch at login, recording, hooks and status line; the installer isn't code-signed yet |
 | Linux | The core (hooks, panel, status line) likely works; no menu bar app or terminal launching; untested |
 
 Other limits:

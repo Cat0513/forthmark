@@ -11,29 +11,14 @@ Every check appends one line to <data>/hook-log.jsonl, so `forthmark.py stats` c
 how often the agent kept the status up to date on its own.
 """
 import json
-import os
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+from fmshared import tracked, utf8_stdio  # noqa: E402
 forthmark = None  # imported only for tracked projects
-
-
-def data_home():
-    return Path(os.environ.get("FORTHMARK_HOME") or "~/.forthmark").expanduser()
-
-
-def tracked(cwd):
-    """Cheap check against the registry, so untracked projects never load the toolkit."""
-    home = data_home()
-    try:
-        projects = json.loads((home / "registry.json").read_text(encoding="utf-8"))["projects"].values()
-    except (OSError, ValueError, KeyError):
-        return False
-    cwd = os.path.realpath(cwd)
-    return any(cwd == p["path"] or cwd.startswith(p["path"].rstrip("/") + "/") for p in projects)
 
 
 def log(pid, result, detail=""):
@@ -70,7 +55,7 @@ def changed_since(project_path, mtime):
     try:
         out = subprocess.run(
             ["git", "status", "--porcelain", "-z", "--untracked-files=all"],
-            cwd=project_path, capture_output=True, text=True, timeout=10, check=True,
+            cwd=project_path, capture_output=True, encoding="utf-8", errors="replace", timeout=10, check=True,
         ).stdout
     except (subprocess.SubprocessError, FileNotFoundError, NotADirectoryError):
         return []
@@ -91,6 +76,7 @@ def changed_since(project_path, mtime):
 
 def main():
     global forthmark
+    utf8_stdio()
     hook_input = json.load(sys.stdin)
     if not tracked(hook_input.get("cwd") or "."):
         return

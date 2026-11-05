@@ -117,6 +117,6 @@ Claude 桌面版、Codex 等客户端以**会话**为单位，擅长对话、看
 
 - 完整支持 **macOS + Claude Code（命令行）**；Claude 桌面版的 Code 标签理论上共用同一份配置，尚未验证
 - Codex / Cursor 等可以用"新建项目 / 打开会话"的快捷入口（命令可配置），状态记录要等 MCP 入口
-- Windows：计划在 v0.1 之后出预览版（核心记录、hook、浏览器面板、状态栏）
+- Windows：预览版（内置 Python 的安装包、托盘应用、面板窗口、通知、记录、hook、状态栏）
 - 中英文界面，跟随 macOS 系统语言
 - 完整的支持范围见 [README](../README.zh-CN.md)「支持范围与限制」
