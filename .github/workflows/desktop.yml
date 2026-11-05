@@ -31,6 +31,7 @@ jobs:
             for i in $(seq 60); do [ -f "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" ] && break; sleep 2; done &&
             sleep 5 &&
             node test/e2e.js &&
+            node test/scroll.js &&
             node test/smoke.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe" &&
             node test/uninstall.js "$LOCALAPPDATA/Programs/forthmark/Forthmark.exe"
           } 2>&1 | tee ../desktop.log
@@ -58,4 +59,21 @@ jobs:
           name: Forthmark-Setup
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" Forthmark-Setup-*.exe --repo "$GITHUB_REPOSITORY" --draft --title "$GITHUB_REF_NAME" --notes "Windows preview. See the README for install steps."
+        run: |
+          file=$(ls Forthmark-Setup-*.exe)
+          hash=$(sha256sum "$file" | cut -d' ' -f1)
+          cat > notes.md <<EOF
+          Windows preview of Forthmark.
+
+          - Installer with bundled Python: no Python setup or administrator rights needed
+          - Tray app with a count, popover and panel windows, notifications, launch at login
+          - Start from the panel: create a project or track an existing folder
+          - Settings: terminal, agent and default location; open a project's folder
+          - On macOS too: stop tracking from the panel, background document scanning
+
+          The installer isn't code-signed yet, so Chrome and Windows SmartScreen may warn you. See the README for what to do.
+
+          SHA256 of \`$file\`: \`$hash\`
+          EOF
+          sed -i 's/^          //' notes.md
+          gh release create "$GITHUB_REF_NAME" "$file" --repo "$GITHUB_REPOSITORY" --draft --title "$GITHUB_REF_NAME" --notes-file notes.md

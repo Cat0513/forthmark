@@ -266,6 +266,74 @@ class Adopt(unittest.TestCase):
         self.assertFalse(missing.exists())
 
 
+class Settings(unittest.TestCase):
+    def setUp(self):
+        forthmark.CONFIG_PATH.unlink(missing_ok=True)
+        self.addCleanup(forthmark.CONFIG_PATH.unlink, missing_ok=True)
+
+    def test_presets_set_all_three_commands(self):
+        forthmark.save_settings({"agent": "codex"})
+        cfg = forthmark.load_config()
+        self.assertEqual((cfg["agent"], cfg["resume_last"], cfg["resume_pick"]), ("codex", "codex resume --last", "codex resume"))
+        self.assertEqual(forthmark.agent_preset(cfg), "codex")
+
+    def test_the_panel_cannot_set_a_command_or_a_program(self):
+        for bad in ({"agent": "calc.exe"}, {"terminal": "C:/evil.exe"}, {"resume_last": "calc.exe"}):
+            try:
+                forthmark.save_settings(bad)
+            except forthmark.OpError:
+                pass
+        self.assertEqual(forthmark.load_config()["agent"], "claude")
+        self.assertEqual(forthmark.load_config()["resume_last"], "claude --continue")
+        self.assertEqual(forthmark.load_config()["terminal"], "auto")
+
+    def test_hand_written_commands_survive_saving_other_settings(self):
+        forthmark.CONFIG_PATH.write_text(json.dumps({"agent": "my-agent --flag"}), encoding="utf-8")
+        forthmark.save_settings({"agent": "custom", "terminal": "auto"})
+        self.assertEqual(forthmark.load_config()["agent"], "my-agent --flag")
+
+    def test_default_location_must_exist(self):
+        with self.assertRaises(forthmark.OpError):
+            forthmark.save_settings({"projects_dir": str(TMP / "没有这个文件夹")})
+        forthmark.save_settings({"projects_dir": str(TMP)})
+        self.assertEqual(forthmark.load_config()["projects_dir"], str(TMP))
+
+    def test_a_corrupt_config_is_not_overwritten(self):
+        forthmark.CONFIG_PATH.write_text("{ not json", encoding="utf-8")
+        with self.assertRaises(forthmark.OpError):
+            forthmark.save_settings({"terminal": "auto"})
+        self.assertEqual(forthmark.CONFIG_PATH.read_text(encoding="utf-8"), "{ not json")
+
+    def test_open_folder_only_for_tracked_projects(self):
+        with mock.patch.object(forthmark, "open_path") as opened:
+            with self.assertRaises(forthmark.OpError):
+                forthmark.open_project_folder("not-a-project")
+        opened.assert_not_called()
+
+
+class FolderPicker(unittest.TestCase):
+    def run_with(self, returncode, stdout):
+        result = subprocess.CompletedProcess([], returncode, stdout=stdout, stderr="")
+        with mock.patch("subprocess.run", return_value=result) as run:
+            return forthmark.pick_folder(), run
+
+    def test_returns_the_choice_without_a_trailing_separator(self):
+        chosen, run = self.run_with(0, "/Users/me/我的 项目/\n" if not forthmark.IS_WINDOWS else "C:\\我的 项目\\\r\n")
+        self.assertIn("我的 项目", chosen)
+        self.assertFalse(chosen.endswith(("/", "\\")))
+        self.assertEqual(run.call_args[0][0][0], "powershell" if forthmark.IS_WINDOWS else "osascript")
+
+    def test_cancel_is_not_an_error(self):
+        self.assertIsNone(self.run_with(1, "")[0])
+
+    @unittest.skipUnless(forthmark.IS_WINDOWS, "PowerShell")
+    def test_the_powershell_script_parses(self):
+        script = forthmark.WINDOWS_PICK_FOLDER % forthmark.powershell_quote("选择")
+        check = "$null = [scriptblock]::Create(($input | Out-String)); 'ok'"
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", check], input=script, capture_output=True, encoding="utf-8", timeout=60)
+        self.assertIn("ok", r.stdout, r.stderr)
+
+
 class SetupFailures(unittest.TestCase):
     def test_corrupt_settings_are_left_alone(self):
         d = TMP / "claude-bad"

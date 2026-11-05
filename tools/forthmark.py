@@ -1224,6 +1224,85 @@ DEFAULT_CONFIG = {
 TERMINALS = ("auto", "windows-terminal", "powershell") if IS_WINDOWS else ("auto", "ghostty", "terminal")
 
 
+AGENT_PRESETS = {
+    "claude": {"agent": "claude", "resume_last": "claude --continue", "resume_pick": "claude --resume"},
+    "codex": {"agent": "codex", "resume_last": "codex resume --last", "resume_pick": "codex resume"},
+}
+
+
+def terminal_installed(choice):
+    if choice == "windows-terminal":
+        return bool(shutil.which("wt"))
+    if choice == "ghostty":
+        return any(a.exists() for a in (Path("/Applications/Ghostty.app"), Path.home() / "Applications" / "Ghostty.app"))
+    return True
+
+
+def agent_preset(cfg):
+    """Which preset the config matches; None for commands the user wrote by hand."""
+    return next((k for k, v in AGENT_PRESETS.items() if all(cfg.get(f) == c for f, c in v.items())), None)
+
+
+def save_settings(args):
+    """The settings window. Only known choices: a panel must not be able to set the commands we run."""
+    try:
+        saved = json.loads(CONFIG_PATH.read_text(encoding="utf-8")) if CONFIG_PATH.exists() else {}
+    except ValueError as e:
+        raise OpError(L(f"{CONFIG_PATH} 不是有效的 JSON，请先修好它：{e}", f"{CONFIG_PATH} isn't valid JSON, please fix it first: {e}"))
+    if "terminal" in args:
+        if args["terminal"] not in TERMINALS or not terminal_installed(args["terminal"]):
+            raise OpError(L(f"这个终端不可用：{args['terminal']}", f"That terminal isn't available: {args['terminal']}"))
+        saved["terminal"] = args["terminal"]
+    if args.get("agent") in AGENT_PRESETS:
+        saved.update(AGENT_PRESETS[args["agent"]])
+    elif args.get("agent"):  # "custom" keeps what's in the file
+        if args["agent"] != "custom":
+            raise OpError(L(f"不支持的 agent：{args['agent']}", f"Unsupported agent: {args['agent']}"))
+    if "projects_dir" in args:
+        raw = str(args["projects_dir"]).strip().strip('"\'')
+        if not Path(os.path.expanduser(raw)).is_dir():
+            raise OpError(L("默认位置的文件夹不存在：", "That default folder doesn't exist: ") + raw)
+        saved["projects_dir"] = raw
+    HOME.mkdir(parents=True, exist_ok=True)
+    write_json(CONFIG_PATH, saved)
+
+
+MAC_PICK_FOLDER = """POSIX path of (choose folder with prompt {prompt})"""
+WINDOWS_PICK_FOLDER = """Add-Type -AssemblyName System.Windows.Forms
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$owner = New-Object System.Windows.Forms.Form -Property @{ TopMost = $true; ShowInTaskbar = $false; Opacity = 0 }
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{ Description = %s }
+if ($dialog.ShowDialog($owner) -eq 'OK') { Write-Output $dialog.SelectedPath }
+"""
+
+
+def pick_folder():
+    """The system's folder picker, for pages with no native bridge (the macOS app, a browser). None if cancelled."""
+    prompt = L("选择文件夹", "Choose a folder")
+    if IS_WINDOWS:
+        cmd = ["powershell", "-NoProfile", "-STA", "-Command", WINDOWS_PICK_FOLDER % powershell_quote(prompt)]
+    else:
+        cmd = ["osascript", "-e", MAC_PICK_FOLDER.format(prompt=json.dumps(prompt, ensure_ascii=False))]
+    try:
+        out = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=600)
+    except (subprocess.SubprocessError, OSError) as e:
+        raise OpError(L(f"无法打开文件夹选择框：{e}", f"Couldn't open the folder picker: {e}"))
+    chosen = out.stdout.strip()
+    if out.returncode or not chosen:  # cancelled
+        return None
+    return chosen.rstrip("/\\") or chosen
+
+
+def open_project_folder(pid):
+    """Takes a project id, never a path: the panel can only open folders that are already tracked."""
+    entry = load_registry()["projects"].get(pid)
+    if not entry:
+        raise OpError(f"unknown project {pid}")
+    if not Path(entry["path"]).is_dir():
+        raise OpError(L("文件夹不存在：", "Folder not found: ") + entry["path"])
+    open_path(entry["path"])
+
+
 def pick_terminal(choice):
     if choice != "auto":
         return choice
@@ -1897,7 +1976,9 @@ def panel_payload():
     cfg = load_config()
     return {"generated_at": now_iso(), "projects": projects, "lang": ui_lang(), "scan": SCANNER.state() if SCANNER else None,
             "config": {"projects_dir": os.path.expanduser(cfg["projects_dir"]), "terminal": cfg["terminal"],
-                       "agent": cfg["agent"].split()[0], "git_init": cfg["git_init"],
+                       "agent": cfg["agent"].split()[0], "git_init": cfg["git_init"], "projects_dir_raw": cfg["projects_dir"],
+                       "terminal_options": [{"id": t, "installed": terminal_installed(t)} for t in TERMINALS],
+                       "agent_preset": agent_preset(cfg),
                        "terminal_name": {"ghostty": "Ghostty", "windows-terminal": "Windows Terminal", "powershell": "PowerShell"}.get(
                            pick_terminal(cfg["terminal"]), L("终端", "Terminal"))}}
 
@@ -2011,6 +2092,14 @@ def make_handler(token):
                     pid = adopt_project(req.get("args", {}).get("dir", ""))
                     render_panel()
                     return self.send(200, json.dumps({"ok": True, "project": pid, "text": L("已接入，agent 已在终端里打开，等你说第一句话", "Tracked; your agent is open in the terminal, waiting for your first message")}, ensure_ascii=False))
+                if req.get("op") == "save_settings":
+                    save_settings(req.get("args", {}))
+                    return self.send(200, json.dumps({"ok": True, "text": L("设置已保存", "Settings saved")}, ensure_ascii=False))
+                if req.get("op") == "pick_folder":
+                    return self.send(200, json.dumps({"ok": True, "path": pick_folder()}, ensure_ascii=False))
+                if req.get("op") == "open_folder":
+                    open_project_folder(req["project"])
+                    return self.send(200, json.dumps({"ok": True}))
                 if req.get("op") == "untrack_project":
                     untrack_project(req["project"])
                     render_panel()
