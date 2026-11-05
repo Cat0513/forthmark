@@ -193,6 +193,8 @@ FORTHMARK_HOME=~/.forthmark-demo/data python3 tools/forthmark.py open
 
 ## 配置
 
+面板上的齿轮可以设置终端、Agent（Claude Code 或 Codex）和新项目的位置。其他配置在这个文件里：
+
 `~/.forthmark/config.json`（不存在就用默认值）：
 
 ```json

@@ -39,6 +39,15 @@ const step = name => console.log(`ok - ${name}`);
     assert.ok(await pop.evaluate(async () => (await fetch("/api/ping")).ok));
     step("popover renders the panel with the native bridge");
 
+    await pop.click("[data-settings]");
+    await pop.waitForSelector(".modal.settings select[name=terminal]");
+    await pop.selectOption("select[name=agent]", "codex");
+    await pop.click('.modal [type="submit"]');
+    await until("settings saved", async () => JSON.parse(fs.readFileSync(path.join(home, "config.json"), "utf8")).agent === "codex");
+    await pop.waitForSelector(".modal.settings", { state: "detached" });
+    await pop.click("[data-settings]");
+    await until("the window shows what was saved", () => pop.evaluate(() => document.querySelector("select[name=agent]")?.value === "codex"), 5000);
+    await pop.click(".modal [data-close]");
     await pop.click("#adoptproj");
     await pop.waitForSelector("#pickdir");
     await pop.click(".modal [data-close]");

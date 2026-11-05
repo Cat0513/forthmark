@@ -168,6 +168,9 @@ button { font: inherit; cursor: pointer; }
 @media (prefers-color-scheme: dark) { :root.glass .modal form { background: #22262e; } }
 .modal h3 { margin: 0 0 2px; font-size: 15px; }
 .modal label { font-size: 12px; color: var(--ink2); display: flex; flex-direction: column; gap: 4px; }
+.modal select { font: inherit; font-size: 13px; color: var(--ink); background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.linkbtn { font: inherit; font-size: inherit; color: var(--blue); background: none; border: 0; padding: 0; cursor: pointer; }
+.linkbtn:hover { text-decoration: underline; }
 .modal input[type=text], .modal textarea { font: inherit; font-size: 13px; color: var(--ink); background: var(--sunk);
   border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
 .modal textarea { min-height: 76px; resize: vertical; }
@@ -462,6 +465,8 @@ applyTheme();
 
 const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
 const EXPAND_ICON = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9"/></svg>`;
+const FOLDER_ICON = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="M1.75 4.25c0-.7.55-1.25 1.25-1.25h3l1.5 1.75H13c.7 0 1.25.55 1.25 1.25v6c0 .7-.55 1.25-1.25 1.25H3c-.7 0-1.25-.55-1.25-1.25z"/></svg>`;
+const GEAR_ICON = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="2.1"/><path d="M8 1.6v1.8M8 12.6v1.8M1.6 8h1.8M12.6 8h1.8M3.5 3.5l1.3 1.3M11.2 11.2l1.3 1.3M3.5 12.5l1.3-1.3M11.2 4.8l1.3-1.3"/></svg>`;
 const WAIT = EN ? { me: "Your call", client: "Client", teammate: "Teammate", external: "External" }
   : { me: "等你决定", client: "等甲方", teammate: "等同事", external: "等外部" };
 const waitLabel = w => w.waiting_on === "me" && w.kind === "do" ? L("等你去做", "Your action") : WAIT[w.waiting_on];
@@ -482,7 +487,7 @@ function render() {
     app.innerHTML = `<div class="card empty-start"><h2>${L("还没有跟踪任何项目", "No projects tracked yet")}</h2>
       ${API ? `<div class="muted">${L("选一种方式开始，都不会改动项目里已有的文件。", "Pick a way to start. Neither changes the files already in a project.")}</div>
       <div class="starts"><button class="act primary" id="newproj">${L("＋ 新建项目", "＋ New project")}</button><button class="act" id="adoptproj">${L("接入已有文件夹", "Track an existing folder")}</button></div>
-      <div class="faint">${L(`也可以在项目里打开 Claude Code，输入 <span class="mono">/forthmark-add</span>。`, `Or open Claude Code in a project and type <span class="mono">/forthmark-add</span>.`)}</div>`
+      <div class="faint">${L(`也可以在项目里打开 Claude Code，输入 <span class="mono">/forthmark-add</span>。`, `Or open Claude Code in a project and type <span class="mono">/forthmark-add</span>.`)} <button class="linkbtn" data-settings="1">${L("设置", "Settings")}</button></div>`
       : `<div class="muted">${L(`在项目里打开 Claude Code，输入 <span class="mono">/forthmark-add</span> 即可接入（不会改动项目里的任何文件）。`, `Open Claude Code in a project and type <span class="mono">/forthmark-add</span> (nothing in the project is changed).`)}</div>`}</div>`;
     if (NATIVE && SHELL === "popover") NATIVE.postMessage({ action: "resize", height: 260 });
     return;
@@ -520,7 +525,8 @@ function render() {
         <button class="iconbtn ghost" data-session="new" title="${L(`新会话：在终端里开一个新的 ${esc(DATA.config?.agent || "claude")} 会话（会拿到项目的当前状态）`, `New session: start ${esc(DATA.config?.agent || "claude")} in a terminal (it receives the project status)`)}">＋</button>
         <button class="iconbtn ghost go" data-session="last" title="${L(`继续：回到最近的会话（由 ${esc(DATA.config?.agent || "claude")} 自己判断哪个最近）`, `Continue: the most recent session (${esc(DATA.config?.agent || "claude")} decides which)`)}">▶</button>
         <button class="iconbtn ghost" data-session="pick" title="${L(`会话列表：用 ${esc(DATA.config?.agent || "claude")} 自己的列表选一个会话`, `Sessions: pick one from ${esc(DATA.config?.agent || "claude")}'s own list`)}">☰</button>
-        <button class="iconbtn ghost" data-untrack="1" title="${L("停止跟踪这个项目（项目文件和状态记录都保留）", "Stop tracking this project (its files and status data are kept)")}">⊘</button>
+        <button class="iconbtn ghost" data-openfolder="1" title="${/Mac/.test(navigator.platform) ? L("在访达中打开", "Open in Finder") : L("在资源管理器中打开", "Open in File Explorer")}">${FOLDER_ICON}</button>
+        <button class="iconbtn ghost" data-settings="1" title="${L("设置", "Settings")}">${GEAR_ICON}</button>
       </span>` : ""}
       <span class="pulse" style="--c:${pulse.c}"><span class="dot ${pulse.live ? "live" : ""}"></span><b style="color:${pulse.c}">${pulse.label}</b>
         <span class="faint">${L("最近推进", "last progress")} <span data-ago="${P.last_activity}">${ago(P.last_activity)}</span></span></span>
@@ -886,20 +892,26 @@ function newProjectDialog() {
   m.innerHTML = `<form>
     <h3>${L("新建项目", "New project")}</h3>
     <label>${L("名字", "Name")}<input type="text" name="name" placeholder="${L("比如：健身打卡小工具", "e.g. habit-tracker")}" autofocus required></label>
-    <label>${L("位置", "Location")}<input type="text" name="dir" value="${esc(base)}/"></label>
+    <label>${L("位置", "Location")}<span class="pathrow"><input type="text" name="dir" value="${esc(base)}/">${window.forthmarkDialogs?.pickFolder ? `<button type="button" class="act" id="pickparent">${L("浏览…", "Browse…")}</button>` : ""}</span></label>
     <label>${L("目标（可选，显示在面板上）", "Goal (optional, shown on the panel)")}<input type="text" name="goal" placeholder="${L("一句话说明要做成什么，比如：每天打卡、每周看到进步", "What it should become, in one line, e.g. log workouts daily, see progress weekly")}"></label>
     <div class="hint">${L(`会创建文件夹${DATA.config?.git_init ? "并 git init" : ""}、接入跟踪，然后在 ${esc(DATA.config?.terminal_name || "终端")} 里打开 ${esc(DATA.config?.agent || "claude")}，第一句话由你来说。`, `Creates the folder${DATA.config?.git_init ? " (git init)" : ""}, tracks it, then opens ${esc(DATA.config?.agent || "claude")} in ${esc(DATA.config?.terminal_name || "a terminal")}. You type the first message.`)}</div>
     <div class="row2"><button type="button" class="act" id="toadopt" style="margin-right:auto">${L("接入已有文件夹", "Track an existing folder")}</button><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("创建并打开", "Create and open")}</button></div>
   </form>`;
   document.body.appendChild(m);
   const f = m.querySelector("form"), name = f.elements.name, dir = f.elements.dir;
-  let dirTouched = false;
+  let dirTouched = false, dirBase = base;
   dir.addEventListener("input", () => dirTouched = true);
-  name.addEventListener("input", () => { if (!dirTouched) dir.value = `${base}/${name.value.trim()}`; });
+  name.addEventListener("input", () => { if (!dirTouched) dir.value = `${dirBase}/${name.value.trim()}`; });
   const close = () => m.remove();
   m.addEventListener("click", e => {
     if (e.target === m || e.target.closest("[data-close]")) close();
     if (e.target.id === "toadopt") { close(); adoptProjectDialog(); }
+    if (e.target.id === "pickparent") window.forthmarkDialogs.pickFolder().then(chosen => {
+      if (!chosen) return;
+      dir.value = `${chosen.replace(/[\\/]$/, "")}/${name.value.trim()}`;
+      dirTouched = false;
+      dirBase = chosen.replace(/[\\/]$/, "");
+    });
   });
   f.addEventListener("submit", async e => {
     e.preventDefault();
@@ -916,6 +928,48 @@ function newProjectDialog() {
   });
   setTimeout(() => name.focus(), 30);
   makeRoom(m, 560);
+}
+
+const TERMINAL_NAMES = { "auto": () => L("自动", "Automatic"), "windows-terminal": () => "Windows Terminal", "powershell": () => "PowerShell", "ghostty": () => "Ghostty", "terminal": () => L("终端（Terminal）", "Terminal") };
+
+function settingsDialog() {
+  const c = DATA.config || {}, pick = window.forthmarkDialogs?.pickFolder, P = curProject();
+  const m = document.createElement("div");
+  m.className = "modal settings";
+  m.innerHTML = `<form>
+    <h3>${L("设置", "Settings")}</h3>
+    <label>${L("打开会话用的终端", "Terminal for sessions")}<select name="terminal">${(c.terminal_options || []).map(t =>
+      `<option value="${t.id}" ${t.id === c.terminal ? "selected" : ""} ${t.installed ? "" : "disabled"}>${TERMINAL_NAMES[t.id]?.() || esc(t.id)}${t.installed ? "" : L("（未安装）", " (not installed)")}</option>`).join("")}</select></label>
+    <label>Agent<select name="agent">
+      <option value="claude" ${c.agent_preset === "claude" ? "selected" : ""}>Claude Code</option>
+      <option value="codex" ${c.agent_preset === "codex" ? "selected" : ""}>${L("Codex（暂不自动记录）", "Codex (no automatic recording yet)")}</option>
+      ${c.agent_preset ? "" : `<option value="custom" selected>${L("自定义（配置文件）", "Custom (config file)")}</option>`}</select></label>
+    <div class="hint" data-codex hidden>${L("Codex 目前只能从面板打开和恢复会话，项目状态不会自动更新。", "With Codex the panel can open and resume sessions, but project status isn't updated automatically yet.")}</div>
+    <label>${L("新建项目的默认位置", "Default location for new projects")}<span class="pathrow"><input type="text" name="projects_dir" value="${esc(c.projects_dir || "")}">${pick ? `<button type="button" class="act" id="pickdefault">${L("浏览…", "Browse…")}</button>` : ""}</span></label>
+    ${P ? `<div class="hint">${L(`当前项目：${esc(P.status.project.name)}`, `This project: ${esc(P.status.project.name)}`)} <button type="button" class="linkbtn" data-untrack="1">${L("停止跟踪", "Stop tracking")}</button></div>` : ""}
+    <div class="row2"><button type="button" class="act" data-close>${L("取消", "Cancel")}</button><button type="submit" class="act primary">${L("保存", "Save")}</button></div>
+  </form>`;
+  document.body.appendChild(m);
+  const f = m.querySelector("form"), close = () => m.remove();
+  const codexHint = () => { f.querySelector("[data-codex]").hidden = f.elements.agent.value !== "codex"; };
+  f.elements.agent.addEventListener("change", codexHint);
+  codexHint();
+  m.addEventListener("click", async e => {
+    if (e.target === m || e.target.closest("[data-close]")) return close();
+    if (e.target.id === "pickdefault") {
+      const chosen = await pick();
+      if (chosen) f.elements.projects_dir.value = chosen;
+    }
+  });
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    const args = { terminal: f.elements.terminal.value, agent: f.elements.agent.value, projects_dir: f.elements.projects_dir.value };
+    const res = await fetch("/api/op", { method: "POST", headers: { "Content-Type": "application/json", "X-Forthmark-Token": API.token },
+      body: JSON.stringify({ op: "save_settings", args }) }).then(r => r.json()).catch(e => ({ ok: false, error: String(e) }));
+    if (!res.ok) return toast(L("没有保存：", "Not saved: ") + res.error);
+    close(); toast(res.text); await refresh();
+  });
+  makeRoom(m, 480);
 }
 
 function adoptProjectDialog() {
@@ -1137,7 +1191,10 @@ document.addEventListener("click", e => {
   if (b.id === "theme") return toggleTheme();
   if (b.id === "newproj") return newProjectDialog();
   if (b.id === "adoptproj") return adoptProjectDialog();
+  if (b.dataset.openfolder) return op("open_folder", {});
+  if (b.dataset.settings) return settingsDialog();
   if (b.dataset.untrack) {
+    document.querySelector(".modal.settings")?.remove();
     if (confirm(L(`停止跟踪「${curProject().status.project.name}」？\n项目文件和状态记录都保留，之后可以重新接入。`, `Stop tracking "${curProject().status.project.name}"?\nIts files and status data are kept; you can track it again later.`))) op("untrack_project", {});
     return;
   }
@@ -1205,7 +1262,7 @@ async function refresh() {
     if (!r.ok) return;
     const next = await r.json();
     if (next.scan) showScan(next.scan);
-    const sig = d => JSON.stringify(d.projects);
+    const sig = d => JSON.stringify([d.projects, d.config]);
     if (sig(next) !== sig(DATA)) { DATA = next; pendingRender = true; }
     if (pendingRender && !typing()) { pendingRender = false; render(); refreshDrawer(); }  // deferred while typing
   } catch (e) {}

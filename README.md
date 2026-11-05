@@ -190,6 +190,8 @@ all reading and writing the same ~/.forthmark/projects/<project>/status.json
 
 ## Configuration
 
+The gear in the panel sets the terminal, the agent (Claude Code or Codex) and where new projects go. Everything else lives in the file:
+
 `~/.forthmark/config.json` (defaults apply when absent):
 
 ```jsonc
