@@ -86,7 +86,11 @@ git clone https://github.com/Cat0513/forthmark.git && cd forthmark
 需要 Windows 10/11（64 位）、Git 和 Claude Code。已内置 Python，不需要管理员权限。
 
 1. 从 [Releases](https://github.com/Cat0513/forthmark/releases/latest) 下载 `Forthmark-Setup-*.exe` 并运行。
-2. 安装包暂未做代码签名，Windows SmartScreen 可能会提示风险：点“更多信息”，再点“仍要运行”。
+2. 安装包暂未做代码签名，浏览器和 Windows 可能会提示风险：
+   - Chrome 可能提示这是危险下载：在下载列表里展开这一项，选择“下载危险文件”。
+   - Windows SmartScreen：点“更多信息”，再点“仍要运行”。
+
+   这些警告针对的是未签名、下载量少的文件，并不能说明文件内容是否安全。要确认下载的是正版文件，可以运行 `(Get-FileHash .\Forthmark-Setup-*.exe -Algorithm SHA256).Hash`，和发布说明里的校验值对比。如果不放心，可以从源码构建，或使用下面的命令行安装。
 3. 首次启动会自动接入 Claude Code 并打开面板。如果看不到托盘图标，到任务栏的 `^` 里找。左键打开面板，右键打开菜单（开机自启、测试通知、退出）。可以直接在面板上新建项目或接入已有文件夹。
 
 在 Windows“设置 → 应用”里卸载：会从 Claude Code 中移除 hook，`~\.forthmark` 里的状态数据会保留。

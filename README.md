@@ -82,7 +82,11 @@ To install or remove parts separately: `python3 tools/forthmark.py setup` / `tea
 Requires Windows 10/11 (64-bit), Git and Claude Code. Python is bundled and administrator rights aren't needed.
 
 1. Download `Forthmark-Setup-*.exe` from [Releases](https://github.com/Cat0513/forthmark/releases/latest) and run it.
-2. The installer isn't code-signed yet, so Windows SmartScreen may warn you: choose **More info**, then **Run anyway**.
+2. The installer isn't code-signed yet, so your browser and Windows may warn you:
+   - Chrome may report a dangerous download: open the entry in its download list and choose **Download dangerous file**.
+   - Windows SmartScreen: choose **More info**, then **Run anyway**.
+
+   These warnings are about an unsigned, little-known file; they don't verify what's inside. To check you have the real file, compare `(Get-FileHash .\Forthmark-Setup-*.exe -Algorithm SHA256).Hash` with the value in the release notes. If in doubt, build it from source or use the command line install below.
 3. Forthmark connects to Claude Code on first launch and opens the panel. If you don't see its tray icon, look under `^` in the taskbar. Left-click opens the panel, right-click the menu (launch at login, test notification, quit). Start from the panel: create a new project or track an existing folder.
 
 Uninstall it from Windows Settings → Apps: the hooks come out of Claude Code, and your status data in `~\.forthmark` is kept.
