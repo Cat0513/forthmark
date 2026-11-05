@@ -334,6 +334,87 @@ class FolderPicker(unittest.TestCase):
         self.assertIn("ok", r.stdout, r.stderr)
 
 
+class DocFiles(unittest.TestCase):
+    def setUp(self):
+        self.repo = TMP / "文档 项目"
+        (self.repo / "test" / "run1").mkdir(parents=True, exist_ok=True)
+        (self.repo / "testing").mkdir(exist_ok=True)
+        for rel, data in (("报告.pdf", b"%PDF \xff\x00"), ("合同.docx", b"PK\x03\x04"), ("说明.md", "# 说明".encode()), ("run.bat", b"echo hi"),
+                          ("test/run1/log.txt", b"log"), ("test/keep.md", b"# keep"), ("testing/other.md", b"# other")):
+            (self.repo / rel).write_bytes(data)
+        cli("add", str(self.repo))
+        self.addCleanup(cli, "remove", str(self.repo))
+        self.pid = next(p for p, e in forthmark.load_registry()["projects"].items() if Path(e["path"]).name == self.repo.name)
+        self.entry = forthmark.load_registry()["projects"][self.pid]
+        forthmark.docs_index_path(self.pid).unlink(missing_ok=True)
+        forthmark.doc_ignores_path(self.pid).unlink(missing_ok=True)
+
+    def docs(self):
+        return {d["path"]: d for d in forthmark.doc_entries(self.pid, self.entry, forthmark.load_status(self.pid))[0]}
+
+    def test_office_and_pdf_files_are_found_but_never_read(self):
+        docs = self.docs()
+        self.assertTrue(docs["报告.pdf"]["binary"])
+        self.assertTrue(docs["合同.docx"]["binary"])
+        self.assertFalse(docs["说明.md"]["binary"])
+        with self.assertRaises(forthmark.OpError):
+            forthmark.read_doc(self.pid, "报告.pdf")
+
+    def test_ignoring_a_folder_hides_it_and_nothing_else(self):
+        self.docs()
+        forthmark.apply_doc_op(self.pid, "doc_ignore", {"path": "test"})
+        docs = self.docs()
+        self.assertNotIn("test/run1/log.txt", docs)
+        self.assertNotIn("test/keep.md", docs)
+        self.assertIn("testing/other.md", docs)  # same prefix, different folder
+        self.assertTrue((self.repo / "test" / "run1" / "log.txt").exists())
+        self.assertEqual(forthmark.load_doc_ignores(self.pid), ["test"])
+        self.assertFalse((self.repo / ".gitignore").exists())
+        forthmark.apply_doc_op(self.pid, "doc_unignore", {"path": "test"})
+        self.assertIn("test/run1/log.txt", self.docs())
+
+    def test_a_flood_in_an_ignored_folder_cant_crowd_out_the_rest(self):
+        with mock.patch.object(forthmark, "DOC_LIMIT", 4):
+            self.assertIn("说明.md", forthmark.scan_doc_files(self.repo, ignored=["test", "testing"])[0])
+
+    def test_ignore_rejects_paths_outside_the_project(self):
+        for bad in ("", "/", "../x", "a/../../x", "C:/Windows"):
+            with self.assertRaises(forthmark.OpError):
+                forthmark.set_doc_ignore(self.pid, bad, True)
+
+    def test_opening_a_script_shows_it_and_never_runs_it(self):
+        with mock.patch.object(forthmark, "open_path") as opened, mock.patch.object(forthmark, "reveal_path") as shown:
+            forthmark.apply_doc_op(self.pid, "doc_open", {"path": "run.bat"})
+            opened.assert_not_called()
+            shown.assert_called_once()
+            forthmark.apply_doc_op(self.pid, "doc_open", {"path": "报告.pdf"})
+            opened.assert_called_once()
+
+    def test_open_with_only_takes_documents_inside_the_project(self):
+        with mock.patch.object(forthmark, "open_with_chooser") as chooser:
+            for bad in ("run.bat", "说明.md", "../../etc/passwd"):
+                with self.assertRaises(forthmark.OpError):
+                    forthmark.apply_doc_op(self.pid, "doc_open_with", {"path": bad})
+            chooser.assert_not_called()
+            forthmark.apply_doc_op(self.pid, "doc_open_with", {"path": "合同.docx"})
+            chooser.assert_called_once()
+
+
+class Backups(unittest.TestCase):
+    def test_setup_keeps_only_the_newest_of_our_backups(self):
+        d = TMP / "claude-backups"
+        d.mkdir(exist_ok=True)
+        (d / "settings.json").write_text("{}", encoding="utf-8")
+        (d / "settings.json.bak-mine").write_text("{}", encoding="utf-8")
+        for i in range(8):
+            (d / f"settings.json.bak-forthmark-2026010100000{i}").write_text("{}", encoding="utf-8")
+        r = subprocess.run(CLI + ["setup"], capture_output=True, encoding="utf-8", timeout=30, env={**os.environ, "FORTHMARK_CLAUDE_DIR": str(d)})
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.addCleanup(subprocess.run, CLI + ["teardown"], capture_output=True, env={**os.environ, "FORTHMARK_CLAUDE_DIR": str(d)})
+        self.assertEqual(len(list(d.glob("settings.json.bak-forthmark-*"))), forthmark.BACKUPS_KEPT)
+        self.assertTrue((d / "settings.json.bak-mine").exists())
+
+
 class SetupFailures(unittest.TestCase):
     def test_corrupt_settings_are_left_alone(self):
         d = TMP / "claude-bad"

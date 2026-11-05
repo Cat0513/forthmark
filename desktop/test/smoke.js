@@ -35,6 +35,8 @@ async function until(what, check, ms = 60000) {
   const self = JSON.parse(fs.readFileSync(report, "utf8"));
   assert.ok(self.url.includes("shell=popover"), self.url);
   assert.strictEqual(self.bridge, true);
+  assert.strictEqual(self.updater, true, "the updater isn't in the package");
+  assert.ok(fs.readFileSync(path.join(resources, "app-update.yml"), "utf8").includes("forthmark"), "the updater has nowhere to look");
   step("packaged app starts and its popover renders with the bridge");
 
   const settings = JSON.parse(fs.readFileSync(path.join(claude, "settings.json"), "utf8"));

@@ -845,6 +845,7 @@ def project_panel_data(pid, entry):
         "id": pid,
         "path": entry["path"],
         "system_dir": is_system_dir(project_path),
+        "docs_ignored": load_doc_ignores(pid),
         "docs_complete": docs_complete,
         "docs_scanning": docs_scanning,
         "since": min(starts) if starts else None,
@@ -931,8 +932,9 @@ def cmd_html(_directory):
 # Read-only discovery of a project's docs and scripts, plus an overlay (tags, notes,
 # pins, roles) stored on our side in docs.json. Project files are never written.
 
-DOC_EXTS = {".md", ".markdown", ".mdx", ".txt", ".sh", ".bash", ".zsh", ".command", ".ps1", ".bat", ".cmd"}
 SCRIPT_EXTS = {".sh", ".bash", ".zsh", ".command", ".ps1", ".bat", ".cmd"}
+BINARY_DOC_EXTS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".rtf"}  # opened, never read
+DOC_EXTS = {".md", ".markdown", ".mdx", ".txt"} | SCRIPT_EXTS | BINARY_DOC_EXTS
 DOC_SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "dist", "build", ".next", "__pycache__", "vendor"}
 DOC_LIMIT = 400
 PREVIEW_LIMIT = 1_000_000
@@ -962,7 +964,11 @@ SCAN_MAX_SECONDS = 20
 INLINE_SCAN_SECONDS = 2  # a hook or CLI call with nothing cached: never make the agent wait
 
 
-def scan_doc_files(project_path, progress=None, seconds=SCAN_MAX_SECONDS):
+def ignored_by(rel, folders):
+    return any(rel == f or rel.startswith(f + "/") for f in folders)
+
+
+def scan_doc_files(project_path, progress=None, seconds=SCAN_MAX_SECONDS, ignored=()):
     """Relative paths of docs/scripts: git-tracked plus untracked-but-not-ignored, else a pruned walk.
     Returns (paths, complete); a very large folder gets what was found within the limits."""
     complete = True
@@ -974,7 +980,9 @@ def scan_doc_files(project_path, progress=None, seconds=SCAN_MAX_SECONDS):
     if not rels or rels == [""]:
         rels, checked, deadline = [], 0, time.monotonic() + seconds
         for root, dirs, names in os.walk(project_path):
-            dirs[:] = [d for d in dirs if d not in DOC_SKIP_DIRS and not d.startswith(".")]
+            here = os.path.relpath(root, project_path).replace(os.sep, "/")
+            dirs[:] = [d for d in dirs if d not in DOC_SKIP_DIRS and not d.startswith(".")
+                       and not ignored_by(d if here == "." else f"{here}/{d}", ignored)]
             rels += [os.path.relpath(os.path.join(root, n), project_path).replace(os.sep, "/") for n in names]
             checked += len(names)
             if progress:
@@ -982,9 +990,40 @@ def scan_doc_files(project_path, progress=None, seconds=SCAN_MAX_SECONDS):
             if checked >= SCAN_MAX_FILES or time.monotonic() > deadline:
                 complete = False
                 break
-    out = sorted({r for r in rels if r and Path(r).suffix.lower() in DOC_EXTS
+    out = sorted({r for r in rels if r and Path(r).suffix.lower() in DOC_EXTS and not ignored_by(r, ignored)
                   and not any(part in DOC_SKIP_DIRS for part in Path(r).parts[:-1])})
     return out[:DOC_LIMIT], complete and len(out) <= DOC_LIMIT
+
+
+def doc_ignores_path(pid):
+    return data_dir(pid) / "docs-ignore.json"
+
+
+def load_doc_ignores(pid):
+    """Folders the user hid from the panel. Kept on our side: nothing goes into the project, no .gitignore."""
+    try:
+        return json.loads(doc_ignores_path(pid).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+
+
+def set_doc_ignore(pid, folder, ignore):
+    rel = str(folder).replace("\\", "/").strip().strip("/")
+    if rel.startswith("./"):
+        rel = rel[2:]
+    if not rel or ".." in rel.split("/") or Path(rel).is_absolute() or re.match(r"^[A-Za-z]:", rel):
+        raise OpError(L("请填写项目里的文件夹路径，比如 test/logs", "Give a folder inside the project, e.g. test/logs"))
+    folders = [f for f in load_doc_ignores(pid) if f != rel]
+    if ignore:
+        folders = sorted(folders + [rel])
+    write_json(doc_ignores_path(pid), folders)
+    index = load_docs_index(pid)
+    if ignore and index:  # right away, without waiting for the next scan
+        save_docs_index(pid, [f for f in index["files"] if not ignored_by(f, folders)], index["complete"])
+    elif not ignore:
+        docs_index_path(pid).unlink(missing_ok=True)  # they're back: look again
+    if SCANNER:
+        SCANNER.finished.pop(pid, None)
 
 
 def docs_index_path(pid):
@@ -1044,7 +1083,7 @@ class DocScanner:
                 self.current = {"pid": pid, "name": entry["name"], "checked": 0}
             started = time.monotonic()
             try:
-                files, complete = scan_doc_files(Path(entry["path"]), lambda n: self.current.update(checked=n))
+                files, complete = scan_doc_files(Path(entry["path"]), lambda n: self.current.update(checked=n), ignored=load_doc_ignores(pid))
                 if data_dir(pid).is_dir():
                     save_docs_index(pid, files, complete)
             except Exception:
@@ -1064,13 +1103,14 @@ def known_doc_files(pid, entry):
     if is_system_dir(project_path):
         return [], True, False
     index = load_docs_index(pid)
+    ignored = load_doc_ignores(pid)
     if SCANNER:
         SCANNER.request(pid, entry)
     if index:
-        return index["files"], index["complete"], False
+        return [f for f in index["files"] if not ignored_by(f, ignored)], index["complete"], False
     if SCANNER:
         return [], True, True
-    files, complete = scan_doc_files(project_path, seconds=INLINE_SCAN_SECONDS)
+    files, complete = scan_doc_files(project_path, seconds=INLINE_SCAN_SECONDS, ignored=ignored)
     if complete:
         save_docs_index(pid, files, complete)
     return files, complete, False
@@ -1088,7 +1128,8 @@ def doc_entries(pid, entry, status):
     docs = []
     files, _, _ = known_doc_files(pid, entry)
     # Annotated files count even when the last scan predates them, or they'd show up as missing.
-    for rel in sorted({*files, *(k for k in meta if (project_path / k).is_file())}):
+    ignored = load_doc_ignores(pid)
+    for rel in sorted({*files, *(k for k in meta if not ignored_by(k, ignored) and (project_path / k).is_file())}):
         full = project_path / rel
         try:
             st = full.stat()
@@ -1097,8 +1138,8 @@ def doc_entries(pid, entry, status):
         ext = full.suffix.lower()
         m = meta.get(rel, {})
         doc = {"path": rel, "ext": ext, "size": st.st_size, "mtime": st.st_mtime,
-               "script": ext in SCRIPT_EXTS, "refs": refs.get(rel, []), **m}
-        if ext not in SCRIPT_EXTS and st.st_size <= 512_000:
+               "script": ext in SCRIPT_EXTS, "binary": ext in BINARY_DOC_EXTS, "refs": refs.get(rel, []), **m}
+        if ext not in SCRIPT_EXTS and ext not in BINARY_DOC_EXTS and st.st_size <= 512_000:
             try:
                 text = full.read_text(encoding="utf-8", errors="replace")
             except OSError:  # e.g. a file only an administrator may read: list it, without its title
@@ -1118,7 +1159,7 @@ def doc_entries(pid, entry, status):
             doc["newer_than_status"] = st.st_mtime > status_time + 1
         docs.append(doc)
     found = {d["path"] for d in docs}
-    missing = [{"path": k, "missing": True, **v} for k, v in meta.items() if k not in found]
+    missing = [{"path": k, "missing": True, **v} for k, v in meta.items() if k not in found and not ignored_by(k, ignored)]
     return docs, missing
 
 
@@ -1138,6 +1179,8 @@ def safe_doc_path(pid, rel):
 
 def read_doc(pid, rel):
     full = safe_doc_path(pid, rel)
+    if full.suffix.lower() in BINARY_DOC_EXTS:
+        raise OpError(L("这类文件请用系统程序打开", "Open this kind of file in its own app"))
     size = full.stat().st_size
     if size > PREVIEW_LIMIT:
         raise OpError("file too large to preview; open it in your editor")
@@ -1182,7 +1225,7 @@ def cmd_doc(_directory):
 def cmd_docs(directory):
     pid, entry = require_project(directory)
     if not is_system_dir(entry["path"]):
-        save_docs_index(pid, *scan_doc_files(Path(entry["path"])))  # asked for by name: worth the wait
+        save_docs_index(pid, *scan_doc_files(Path(entry["path"]), ignored=load_doc_ignores(pid)))  # asked for by name: worth the wait
     docs, missing = doc_entries(pid, entry, full_status(pid))
     for d in docs:
         mark = "★" if d.get("source") else " "
@@ -1788,11 +1831,30 @@ OPS = {
 }
 
 
-DOC_OPS = {"doc_meta", "doc_viewed", "doc_open", "doc_forget"}
+DOC_OPS = {"doc_meta", "doc_viewed", "doc_open", "doc_open_with", "doc_reveal", "doc_forget", "doc_ignore", "doc_unignore"}
+
+
+def reveal_path(full):
+    """Show a file in its folder."""
+    if IS_WINDOWS:
+        subprocess.Popen(f'explorer /select,"{full}"')
+    else:
+        subprocess.run(["open", "-R", str(full)])
+
+
+def open_with_chooser(full):
+    """The system's "open with" dialog (Windows); macOS has none to call, so show the file in Finder."""
+    if IS_WINDOWS:
+        subprocess.Popen(f"rundll32.exe shell32.dll,OpenAs_RunDLL {full}")
+    else:
+        reveal_path(full)
 
 
 def apply_doc_op(pid, op, args):
     rel = args["path"]
+    if op in ("doc_ignore", "doc_unignore"):
+        set_doc_ignore(pid, rel, op == "doc_ignore")
+        return L("已忽略这个文件夹，文件不受影响", "Folder ignored; its files are untouched") if op == "doc_ignore" else L("已恢复显示这个文件夹", "Folder shown again")
     if op == "doc_viewed":
         safe_doc_path(pid, rel)
         doc_set_meta(pid, rel, last_viewed=now_iso())
@@ -1802,8 +1864,21 @@ def apply_doc_op(pid, op, args):
         meta.pop(rel, None)
         save_docs_meta(pid, meta)
         return L("已清除这份文档的标记", "Cleared this doc's notes")
+    if op == "doc_reveal":
+        reveal_path(safe_doc_path(pid, rel))
+        return L("已在文件夹中显示", "Shown in its folder")
+    if op == "doc_open_with":
+        full = safe_doc_path(pid, rel)
+        if full.suffix.lower() not in BINARY_DOC_EXTS:
+            raise OpError(L("这类文件不支持选择程序打开", "This kind of file can't be opened this way"))
+        open_with_chooser(full)
+        return L("请选择打开方式", "Choose an app") if IS_WINDOWS else L("已在访达中显示", "Shown in Finder")
     if op == "doc_open":
-        open_path(safe_doc_path(pid, rel))
+        full = safe_doc_path(pid, rel)
+        if full.suffix.lower() in SCRIPT_EXTS:  # "opening" a .bat or .command runs it: a click must never do that
+            reveal_path(full)
+            return L("脚本不会被运行，已在文件夹中显示", "Scripts aren't run; shown in its folder")
+        open_path(full)
         return L("已用默认程序打开", "Opened in the default app")
     fields = {k: args[k] for k in ("tags", "note", "pinned", "hidden", "role", "purpose") if k in args}
     doc_set_meta(pid, rel, **fields)
@@ -2239,6 +2314,7 @@ def cmd_open(_directory):
 # ---------------------------------------------------------------- setup
 
 SETTINGS = CLAUDE_DIR / "settings.json"
+BACKUPS_KEPT = 5
 MANIFEST = HOME / "setup.json"
 COMMANDS = ("forthmark.md", "forthmark-add.md", "forthmark-remove.md")
 
@@ -2298,6 +2374,9 @@ def cmd_setup(_directory):
         backup = SETTINGS.with_name(f"settings.json.bak-forthmark-{datetime.now():%Y%m%d%H%M%S}")
         shutil.copy2(SETTINGS, backup)
         print(f"backup   {backup}")
+        # Every app update comes through here. Only our own backups are removed, the newest few kept.
+        for old in sorted(SETTINGS.parent.glob("settings.json.bak-forthmark-*"))[:-BACKUPS_KEPT]:
+            old.unlink(missing_ok=True)
 
     drop_our_hooks(settings)
     hooks = settings.setdefault("hooks", {})
